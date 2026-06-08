@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ExportService } from '../../core/services/export.service';
+import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
-import { SettingsService } from '../../core/services/settings.service';
 import { Question } from '../../core/models/question.model';
 import { slugify } from '../../core/utils/file-splitter.util';
 import { DomainBadgeComponent } from '../../shared/components/domain-badge.component';
@@ -250,7 +250,7 @@ import { DomainBadgeComponent } from '../../shared/components/domain-badge.compo
 export class ExportComponent {
   private readonly exportService = inject(ExportService);
   private readonly questionsService = inject(QuestionsService);
-  private readonly settings = inject(SettingsService);
+  private readonly packs = inject(PacksService);
 
   protected maxPerFile = 10;
 
@@ -278,7 +278,7 @@ export class ExportComponent {
   downloadAll(): void {
     const questions = this.questionsService.questions();
     if (questions.length === 0) return;
-    const certName = this.settings.certificationName();
+    const certName = this.packs.activePack().name;
     const content = this.exportService.buildMarkdownContent(questions, 1, 1, certName);
     const filename = this.exportService.buildFilename(certName, 'all');
     this.exportService.downloadFile(content, filename);
@@ -287,7 +287,7 @@ export class ExportComponent {
   downloadDomain(domain: string): void {
     const questions = this.questionsService.selectedQuestions().filter((q) => q.domain === domain);
     if (questions.length === 0) return;
-    const certName = this.settings.certificationName();
+    const certName = this.packs.activePack().name;
     const content = this.exportService.buildMarkdownContent(questions, 1, 1, certName);
     const suffix = slugify(domain) || 'domain';
     const filename = this.exportService.buildFilename(certName, suffix);
@@ -296,7 +296,7 @@ export class ExportComponent {
 
   private emitBatches(questions: Question[], maxPerFile: number): void {
     const batches = this.exportService.buildBatches(questions, Math.max(1, maxPerFile));
-    const certName = this.settings.certificationName();
+    const certName = this.packs.activePack().name;
     const total = batches.length;
     batches.forEach((batch, index) => {
       const part = index + 1;

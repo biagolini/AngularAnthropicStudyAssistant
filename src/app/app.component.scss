@@ -27,17 +27,27 @@
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
   min-width: 0;
+  background: transparent;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.brand:hover {
+  background: var(--bg-subtle);
 }
 
 .brand-mark {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--color-purple), var(--color-blue));
+  background: var(--pack-color, var(--color-purple));
   flex-shrink: 0;
 }
 
@@ -45,6 +55,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  text-align: left;
 }
 
 .brand-title {
@@ -54,14 +65,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 60vw;
+  max-width: 50vw;
+}
+
+.brand-subtitle,
+.brand-version {
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50vw;
 }
 
 .brand-subtitle {
-  font-size: var(--font-size-xs);
-  color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.brand-chev {
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .header-actions {
@@ -172,17 +197,24 @@
   background: var(--bg-surface);
   z-index: 31;
   box-shadow: var(--shadow-lg);
-  animation: slide-in 240ms ease;
+  animation: slide-in-right 240ms ease;
   overflow: hidden;
 }
 
-@keyframes slide-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+.drawer-host-left {
+  left: 0;
+  right: auto;
+  animation: slide-in-left 240ms ease;
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes fade-in {

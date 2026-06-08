@@ -1,19 +1,28 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { Question } from '../models/question.model';
 import { DEFAULT_DOMAIN } from '../models/settings.model';
+import { PacksService } from './packs.service';
 import { StorageService } from './storage.service';
 
 @Injectable({ providedIn: 'root' })
 export class QuestionsService {
   private readonly storage = inject(StorageService);
+  private readonly packs = inject(PacksService);
 
   private readonly state = signal<Question[]>(this.storage.getQuestions());
   private readonly selectedIdsState = signal<ReadonlySet<string>>(new Set());
 
-  readonly questions = computed(() =>
+  readonly allQuestions = computed(() =>
     [...this.state()].sort((a, b) => b.createdAt - a.createdAt),
   );
-  readonly count = computed(() => this.state().length);
+
+  readonly questions = computed(() => {
+    const activeId = this.packs.activePack().id;
+    return this.allQuestions().filter((q) => q.packId === activeId);
+  });
+
+  readonly count = computed(() => this.questions().length);
+
   readonly selectedIds = this.selectedIdsState.asReadonly();
   readonly selectedCount = computed(() => this.selectedIdsState().size);
 
@@ -29,6 +38,18 @@ export class QuestionsService {
     }
     return [...counts.entries()].map(([domain, total]) => ({ domain, total }));
   });
+
+  constructor() {
+    // Reset selection whenever the active pack changes.
+    let lastActive: string | null = null;
+    effect(() => {
+      const activeId = this.packs.activePack().id;
+      if (lastActive !== null && lastActive !== activeId) {
+        this.selectedIdsState.set(new Set());
+      }
+      lastActive = activeId;
+    });
+  }
 
   add(question: Question): void {
     const next = [question, ...this.state()];
@@ -56,9 +77,16 @@ export class QuestionsService {
     this.deselect(id);
   }
 
-  clearAll(): void {
-    this.state.set([]);
-    this.storage.clearQuestions();
+  clearActivePack(): void {
+    const activeId = this.packs.activePack().id;
+    const next = this.state().filter((q) => q.packId !== activeId);
+    this.persist(next);
+    this.selectedIdsState.set(new Set());
+  }
+
+  removeByPackId(packId: string): void {
+    const next = this.state().filter((q) => q.packId !== packId);
+    this.persist(next);
     this.selectedIdsState.set(new Set());
   }
 
@@ -70,7 +98,7 @@ export class QuestionsService {
   }
 
   selectAll(): void {
-    this.selectedIdsState.set(new Set(this.state().map((q) => q.id)));
+    this.selectedIdsState.set(new Set(this.questions().map((q) => q.id)));
   }
 
   deselectAll(): void {

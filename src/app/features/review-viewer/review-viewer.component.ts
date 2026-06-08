@@ -2,10 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { FormsModule } from '@angular/forms';
 import { Question } from '../../core/models/question.model';
 import { AnthropicService } from '../../core/services/anthropic.service';
+import { ModelsService } from '../../core/services/models.service';
+import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { StorageService } from '../../core/services/storage.service';
 import { isAwsApiKey } from '../../core/models/settings.model';
+import { stripInferredMetadata } from '../../core/utils/domain-inference.util';
 import { DomainBadgeComponent } from '../../shared/components/domain-badge.component';
 import { MarkdownRendererComponent } from './markdown-renderer.component';
 
@@ -125,6 +128,20 @@ import { MarkdownRendererComponent } from './markdown-renderer.component';
                 [disabled]="refining()"
                 aria-label="Refinement feedback"
               ></textarea>
+              <label class="model-row">
+                <span class="model-label">Model</span>
+                <select
+                  class="model-select"
+                  [ngModel]="selectedRefineModel()"
+                  (ngModelChange)="onSelectRefineModel($event)"
+                  [disabled]="refining()"
+                  aria-label="Model for refinement"
+                >
+                  @for (model of availableModels(); track model.id) {
+                    <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
+                  }
+                </select>
+              </label>
               <div class="refine-actions">
                 <button
                   type="button"
@@ -318,6 +335,33 @@ import { MarkdownRendererComponent } from './markdown-renderer.component';
         display: flex;
         justify-content: flex-end;
       }
+      .model-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+      }
+      .model-label {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+      }
+      .model-select {
+        flex: 1;
+        min-height: 36px;
+        padding: 0 var(--space-sm);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--bg-border);
+        background: var(--bg-input);
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+      }
+      .model-select:focus-visible {
+        outline: none;
+        border-color: var(--color-purple);
+      }
+      .model-select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
       .refine-warn {
         color: var(--color-amber);
         font-size: var(--font-size-sm);
@@ -392,6 +436,8 @@ export class ReviewViewerComponent {
   private readonly anthropic = inject(AnthropicService);
   private readonly settings = inject(SettingsService);
   private readonly storage = inject(StorageService);
+  private readonly modelsService = inject(ModelsService);
+  private readonly packs = inject(PacksService);
 
   readonly question = input<Question | null>(null);
   readonly showBackButton = input<boolean>(false);
@@ -403,10 +449,15 @@ export class ReviewViewerComponent {
   protected readonly editing = signal(false);
   protected readonly refining = signal(false);
   protected readonly refineError = signal<string | null>(null);
+  protected readonly refineModelOverride = signal<string | null>(null);
   protected editDraft = '';
   protected refineDraft = '';
 
   readonly hasApiKey = computed(() => !!this.storage.apiKey());
+  readonly availableModels = this.modelsService.models;
+  readonly selectedRefineModel = computed(
+    () => this.refineModelOverride() ?? this.modelsService.resolveModel(this.settings.defaultModel()),
+  );
 
   constructor() {
     effect(() => {
@@ -422,6 +473,10 @@ export class ReviewViewerComponent {
   onDelete(id: string): void {
     this.questionsService.remove(id);
     this.deleted.emit(id);
+  }
+
+  onSelectRefineModel(value: string): void {
+    this.refineModelOverride.set(value);
   }
 
   onToggleEdit(question: Question): void {
@@ -463,16 +518,19 @@ export class ReviewViewerComponent {
       const aws = isAwsApiKey(apiKey)
         ? { workspaceId: this.settings.awsWorkspaceId(), region: this.settings.awsRegion() }
         : undefined;
+      const activePack = this.packs.activePack();
       const revised = await this.anthropic.refineReview(
         question.review,
         feedback,
         apiKey,
-        this.settings.certificationName(),
-        this.settings.domains(),
+        activePack.name,
+        activePack.domains,
         aws,
+        this.selectedRefineModel(),
       );
-      this.questionsService.updateReview(question.id, revised);
+      this.questionsService.updateReview(question.id, stripInferredMetadata(revised));
       this.refineDraft = '';
+      this.refineModelOverride.set(null);
     } catch (err) {
       this.refineError.set(err instanceof Error ? err.message : 'Refine failed.');
     } finally {

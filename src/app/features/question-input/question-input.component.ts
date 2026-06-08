@@ -1,13 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AnthropicService } from '../../core/services/anthropic.service';
+import { ModelsService } from '../../core/services/models.service';
+import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { StorageService } from '../../core/services/storage.service';
 import { Question } from '../../core/models/question.model';
 import {
   parseDomainFromResponse,
-  stripInferredDomainLine,
+  parseTitleFromResponse,
+  stripInferredMetadata,
 } from '../../core/utils/domain-inference.util';
 
 @Component({
@@ -37,6 +40,21 @@ import {
           placeholder="Paste the question stem and all alternatives (A, B, C, D) here..."
           class="textarea"
         ></textarea>
+      </label>
+
+      <label class="model-row">
+        <span class="model-label">Model</span>
+        <select
+          class="model-select"
+          [ngModel]="selectedModel()"
+          (ngModelChange)="onSelectModel($event)"
+          [disabled]="loading()"
+          aria-label="Model for this generation"
+        >
+          @for (model of availableModels(); track model.id) {
+            <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
+          }
+        </select>
       </label>
 
       <button
@@ -87,6 +105,33 @@ import {
         border-radius: var(--radius-md);
         border: 1px solid var(--color-amber);
         font-size: var(--font-size-sm);
+      }
+      .model-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+      }
+      .model-label {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+      }
+      .model-select {
+        flex: 1;
+        min-height: 36px;
+        padding: 0 var(--space-sm);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--bg-border);
+        background: var(--bg-input);
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+      }
+      .model-select:focus-visible {
+        outline: none;
+        border-color: var(--color-purple);
+      }
+      .model-select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
       .textarea-wrap {
         display: block;
@@ -171,15 +216,26 @@ export class QuestionInputComponent {
   private readonly storage = inject(StorageService);
   private readonly settings = inject(SettingsService);
   private readonly questionsService = inject(QuestionsService);
+  private readonly modelsService = inject(ModelsService);
+  private readonly packs = inject(PacksService);
 
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly modelOverride = signal<string | null>(null);
   protected draft = '';
 
   readonly hasApiKey = computed(() => !!this.storage.apiKey());
   readonly canGenerate = computed(() => this.hasApiKey() && !this.loading());
+  readonly availableModels = this.modelsService.models;
+  readonly selectedModel = computed(
+    () => this.modelOverride() ?? this.modelsService.resolveModel(this.settings.defaultModel()),
+  );
 
   readonly generated = output<Question>();
+
+  onSelectModel(value: string): void {
+    this.modelOverride.set(value);
+  }
 
   async onGenerate(): Promise<void> {
     const text = this.draft.trim();
@@ -197,18 +253,29 @@ export class QuestionInputComponent {
     this.error.set(null);
 
     try {
-      const domains = this.settings.domains();
-      const certName = this.settings.certificationName();
+      const activePack = this.packs.activePack();
+      const domains = activePack.domains;
+      const certName = activePack.name;
       const awsOptions = apiKey.startsWith('AEA')
         ? { workspaceId: this.settings.awsWorkspaceId(), region: this.settings.awsRegion() }
         : undefined;
-      const raw = await this.anthropic.generateReview(text, apiKey, certName, domains, awsOptions);
+      const raw = await this.anthropic.generateReview(
+        text,
+        apiKey,
+        certName,
+        domains,
+        awsOptions,
+        this.selectedModel(),
+      );
       const domain = parseDomainFromResponse(raw, domains);
-      const review = stripInferredDomainLine(raw);
+      const fallbackTitle = text.slice(0, 80).replace(/\s+/g, ' ').trim();
+      const title = parseTitleFromResponse(raw, fallbackTitle);
+      const review = stripInferredMetadata(raw);
 
       const question: Question = {
         id: crypto.randomUUID(),
-        title: text.slice(0, 80).replace(/\s+/g, ' ').trim(),
+        packId: activePack.id,
+        title,
         domain,
         review,
         createdAt: Date.now(),
@@ -216,6 +283,7 @@ export class QuestionInputComponent {
 
       this.questionsService.add(question);
       this.draft = '';
+      this.modelOverride.set(null);
       this.generated.emit(question);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to generate review.');

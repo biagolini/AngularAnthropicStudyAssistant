@@ -39,8 +39,10 @@ function hash(value: string): number {
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        white-space: nowrap;
-        line-height: 1.6;
+        line-height: 1.4;
+        max-width: 100%;
+        word-break: break-word;
+        text-align: left;
       }
     `,
   ],

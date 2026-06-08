@@ -137,12 +137,21 @@ const ALLOWED_PREFIXES = ['sk-ant-', 'AEA'] as const;
         border-radius: var(--radius-md);
         background: var(--bg-elevated);
         border: 1px solid var(--bg-border);
+        min-width: 0;
+      }
+      .stored .btn {
+        flex-shrink: 0;
       }
       .masked {
         font-family: var(--font-mono);
         color: var(--text-secondary);
         font-size: var(--font-size-base);
         letter-spacing: 0.04em;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     `,
   ],
@@ -164,8 +173,7 @@ export class ApiKeyComponent {
     if (!key) return '';
     const prefix = ALLOWED_PREFIXES.find((p) => key.startsWith(p)) ?? key.slice(0, 3);
     const tail = key.slice(-4);
-    const stars = Math.max(4, key.length - prefix.length - 4);
-    return `${prefix}${'*'.repeat(stars)}${tail}`;
+    return `${prefix}…${tail}`;
   });
 
   toggleVisibility(): void {

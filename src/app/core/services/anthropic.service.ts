@@ -1,8 +1,7 @@
 import { Injectable } from '@angular/core';
-import { isAwsApiKey } from '../models/settings.model';
+import { DEFAULT_MODEL, isAwsApiKey } from '../models/settings.model';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
 const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_TOKENS = 2000;
 
@@ -30,6 +29,7 @@ export class AnthropicService {
     certName: string,
     domains: string[],
     aws?: AwsRoutingOptions,
+    model?: string,
   ): Promise<string> {
     const trimmedFeedback = feedback.trim();
     if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
@@ -51,6 +51,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
       aws,
       system,
       [{ role: 'user', content: userMessage }],
+      model,
     );
   }
 
@@ -88,6 +89,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     certName: string,
     domains: string[],
     aws?: AwsRoutingOptions,
+    model?: string,
   ): Promise<string> {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
@@ -97,6 +99,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
       aws,
       system,
       [{ role: 'user', content: trimmedQuestion }],
+      model,
     );
   }
 
@@ -105,6 +108,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     aws: AwsRoutingOptions | undefined,
     system: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    model?: string,
   ): Promise<string> {
     if (!apiKey) throw new Error('Missing API key.');
     const useAws = isAwsApiKey(apiKey);
@@ -133,7 +137,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
+        model: model || DEFAULT_MODEL,
         max_tokens: MAX_TOKENS,
         system,
         messages,
@@ -167,8 +171,8 @@ function buildSystemPrompt(certName: string, domains: string[]): string {
     domains.length > 0
       ? `The following knowledge domains have been defined for this certification:\n${domains
           .map((d, i) => `${i + 1}. ${d}`)
-          .join('\n')}\n\nClassify each question into one of these domains. At the end of your response, output:\nINFERRED_DOMAIN: [exact domain name from the list above]`
-      : `No specific domains have been defined. Classify all questions under the domain name: General\n\nAt the end of your response, output:\nINFERRED_DOMAIN: General`;
+          .join('\n')}\n\nClassify each question into one of these domains. At the very end of your response, AFTER all other content, output these two lines exactly:\nINFERRED_TITLE: [short 4-8 word descriptive title for this question, no prefixes like "Scenario:" or "Question:", no quotes]\nINFERRED_DOMAIN: [exact domain name from the list above]`
+      : `No specific domains have been defined. Classify all questions under the domain name: General\n\nAt the very end of your response, AFTER all other content, output these two lines exactly:\nINFERRED_TITLE: [short 4-8 word descriptive title for this question, no prefixes like "Scenario:" or "Question:", no quotes]\nINFERRED_DOMAIN: General`;
 
   return `You are a technical reviewer preparing study material for an IT certification exam. ${certLine}
 

@@ -1,24 +1,24 @@
 export type ThemeMode = 'light' | 'dark';
 
 export interface AppSettings {
-  certificationName: string;
-  domains: string[];
   theme: ThemeMode;
   awsWorkspaceId: string;
   awsRegion: string;
+  defaultModel: string;
+  activePackId: string;
 }
 
+export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
+
 export const DEFAULT_SETTINGS: AppSettings = {
-  certificationName: '',
-  domains: [],
   theme: 'light',
   awsWorkspaceId: '',
   awsRegion: 'us-east-1',
+  defaultModel: DEFAULT_MODEL,
+  activePackId: '',
 };
 
 export const DEFAULT_DOMAIN = 'General';
-
-export const MAX_DOMAINS = 20;
 
 export const AWS_REGIONS = [
   'us-east-1',

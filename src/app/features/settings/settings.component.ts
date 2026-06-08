@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, output, signal } 
 import { FormsModule } from '@angular/forms';
 import { AWS_REGIONS, isAwsApiKey } from '../../core/models/settings.model';
 import { AnthropicService } from '../../core/services/anthropic.service';
+import { ModelsService } from '../../core/services/models.service';
 import { QuestionsService } from '../../core/services/questions.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { StorageService } from '../../core/services/storage.service';
@@ -38,85 +39,51 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
 
       <div class="drawer-body">
         <section class="block">
-          <header class="section-header">
-            <h3>Certification Name</h3>
-          </header>
-          <input
-            class="text-input"
-            type="text"
-            placeholder="e.g. AWS Solutions Architect SAA-C03"
-            [ngModel]="certName()"
-            (ngModelChange)="onCertNameChange($event)"
-            (blur)="commitCertName()"
-            (keyup.enter)="commitCertName()"
-            aria-label="Certification name"
-          />
-        </section>
-
-        <section class="block">
-          <header class="section-header">
-            <h3>Knowledge Domains</h3>
-            <p class="helper">
-              Define the domains for this certification. The AI will classify each question into one of these domains. If left empty, all questions go to General.
-            </p>
-          </header>
-
-          <div class="domain-input">
-            <input
-              class="text-input"
-              type="text"
-              placeholder="Add a domain"
-              [(ngModel)]="domainDraft"
-              (keyup.enter)="onAddDomain()"
-              aria-label="New domain name"
-              [disabled]="!canAdd()"
-            />
-            <button
-              type="button"
-              class="btn btn-primary"
-              (click)="onAddDomain()"
-              [disabled]="!canAdd() || !domainDraft.trim()"
-            >
-              Add
-            </button>
-          </div>
-          @if (domainError()) {
-            <p class="error">{{ domainError() }}</p>
-          }
-          <p class="count">{{ domains().length }} / 20 domains</p>
-
-          @if (domains().length > 0) {
-            <ul class="chips">
-              @for (domain of domains(); track domain) {
-                <li class="chip">
-                  <span>{{ domain }}</span>
-                  <button
-                    type="button"
-                    class="chip-remove"
-                    (click)="onRemoveDomain(domain)"
-                    [attr.aria-label]="'Remove ' + domain"
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                      <path
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        d="M5 5l14 14M19 5L5 19"
-                      />
-                    </svg>
-                  </button>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="empty">No domains defined yet. Questions will be classified as General.</p>
-          }
-        </section>
-
-        <section class="block">
           <app-api-key />
         </section>
+
+        @if (hasApiKey()) {
+          <section class="block">
+            <header class="section-header">
+              <div class="title-row">
+                <h3>Default model</h3>
+                @if (modelsLoading()) {
+                  <span class="spinner" aria-hidden="true"></span>
+                }
+                <button
+                  type="button"
+                  class="info-btn"
+                  (click)="refreshModels()"
+                  [disabled]="modelsLoading()"
+                  aria-label="Refresh models list"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                    <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 1 0 2.34-5.66M4 4v4h4"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="helper">
+                Used for Generate Review and Refine. You can override per call. Lighter tiers (fast) respond quicker and cost less.
+              </p>
+            </header>
+            <select
+              class="text-input"
+              [ngModel]="defaultModel()"
+              (ngModelChange)="onDefaultModelChange($event)"
+              aria-label="Default model"
+            >
+              @for (model of availableModels(); track model.id) {
+                <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
+              }
+              @if (!availableHas(defaultModel())) {
+                <option [value]="defaultModel()">{{ defaultModel() }} (not in current list)</option>
+              }
+            </select>
+            @if (modelsError()) {
+              <p class="error">{{ modelsError() }}</p>
+            }
+          </section>
+        }
 
         @if (showAwsBlock()) {
           <section class="block aws-block">
@@ -221,6 +188,9 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
         <section class="block danger">
           <header class="section-header">
             <h3>Danger Zone</h3>
+            <p class="helper">
+              Clears the questions belonging to the active pack only. Other packs and your API key are not affected.
+            </p>
           </header>
           <button
             type="button"
@@ -228,22 +198,22 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
             (click)="onClearRequested()"
             [disabled]="questionCount() === 0"
           >
-            Clear all questions
+            Clear questions in this pack
           </button>
-          <p class="helper">{{ questionCount() }} stored question{{ questionCount() === 1 ? '' : 's' }}.</p>
+          <p class="helper">{{ questionCount() }} question{{ questionCount() === 1 ? '' : 's' }} in this pack.</p>
         </section>
       </div>
 
       @if (confirmingClear()) {
         <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
           <div class="confirm">
-            <h3 id="confirm-title">Clear all questions?</h3>
+            <h3 id="confirm-title">Clear questions in this pack?</h3>
             <p>
-              This will permanently delete all {{ questionCount() }} question{{ questionCount() === 1 ? '' : 's' }}. Your settings and API key will not be affected.
+              This will permanently delete the {{ questionCount() }} question{{ questionCount() === 1 ? '' : 's' }} in the active pack. Your settings, API key, and other packs will not be affected.
             </p>
             <div class="confirm-actions">
               <button type="button" class="btn btn-ghost" (click)="onCancelClear()">Cancel</button>
-              <button type="button" class="btn btn-danger" (click)="onConfirmClear()">Delete all</button>
+              <button type="button" class="btn btn-danger" (click)="onConfirmClear()">Delete</button>
             </div>
           </div>
         </div>
@@ -591,19 +561,14 @@ export class SettingsComponent {
   private readonly questionsService = inject(QuestionsService);
   private readonly storage = inject(StorageService);
   private readonly anthropic = inject(AnthropicService);
+  private readonly modelsService = inject(ModelsService);
 
-  protected readonly certNameDraft = signal(this.settings.certificationName());
   protected readonly workspaceIdDraft = signal(this.settings.awsWorkspaceId());
-  protected readonly domainError = signal<string | null>(null);
   protected readonly confirmingClear = signal(false);
-  protected domainDraft = '';
   protected readonly regions = AWS_REGIONS;
 
   readonly closed = output<void>();
 
-  readonly certName = computed(() => this.certNameDraft());
-  readonly domains = this.settings.domains;
-  readonly canAdd = this.settings.canAddDomain;
   readonly questionCount = this.questionsService.count;
   readonly workspaceId = computed(() => this.workspaceIdDraft());
   readonly region = this.settings.awsRegion;
@@ -613,41 +578,15 @@ export class SettingsComponent {
     () => this.showAwsBlock() && !this.workspaceId().trim(),
   );
   readonly hasApiKey = computed(() => !!this.storage.apiKey());
+  readonly availableModels = this.modelsService.models;
+  readonly modelsLoading = this.modelsService.loading;
+  readonly modelsError = this.modelsService.error;
+  readonly defaultModel = this.settings.defaultModel;
 
   protected readonly testStatus = signal<TestStatus>('idle');
   protected readonly testError = signal<string>('');
   protected readonly testEndpoint = signal<string>('');
   protected readonly awsInfoOpen = signal(false);
-
-  onCertNameChange(value: string): void {
-    this.certNameDraft.set(value);
-  }
-
-  commitCertName(): void {
-    this.settings.setCertificationName(this.certNameDraft());
-  }
-
-  onAddDomain(): void {
-    const value = this.domainDraft.trim();
-    if (!value) {
-      this.domainError.set('Domain name cannot be empty.');
-      return;
-    }
-    const added = this.settings.addDomain(value);
-    if (!added) {
-      const exists = this.settings
-        .domains()
-        .some((d) => d.toLowerCase() === value.toLowerCase());
-      this.domainError.set(exists ? 'Domain already exists.' : 'Maximum 20 domains reached.');
-      return;
-    }
-    this.domainDraft = '';
-    this.domainError.set(null);
-  }
-
-  onRemoveDomain(domain: string): void {
-    this.settings.removeDomain(domain);
-  }
 
   onClearRequested(): void {
     this.confirmingClear.set(true);
@@ -658,7 +597,7 @@ export class SettingsComponent {
   }
 
   onConfirmClear(): void {
-    this.questionsService.clearAll();
+    this.questionsService.clearActivePack();
     this.confirmingClear.set(false);
   }
 
@@ -673,6 +612,18 @@ export class SettingsComponent {
   onRegionChange(value: string): void {
     this.settings.setAwsRegion(value);
     this.resetTestStatus();
+  }
+
+  onDefaultModelChange(value: string): void {
+    this.settings.setDefaultModel(value);
+  }
+
+  refreshModels(): void {
+    void this.modelsService.refresh();
+  }
+
+  availableHas(id: string): boolean {
+    return this.availableModels().some((m) => m.id === id);
   }
 
   openAwsInfo(): void {

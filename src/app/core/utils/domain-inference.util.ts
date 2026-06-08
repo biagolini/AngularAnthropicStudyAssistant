@@ -1,5 +1,7 @@
 import { DEFAULT_DOMAIN } from '../models/settings.model';
 
+const MAX_TITLE_LENGTH = 80;
+
 export function inferDomain(text: string, domains: string[]): string {
   if (domains.length === 0) return DEFAULT_DOMAIN;
   const lower = text.toLowerCase();
@@ -19,6 +21,18 @@ export function parseDomainFromResponse(text: string, domains: string[]): string
   return domains[0];
 }
 
-export function stripInferredDomainLine(text: string): string {
-  return text.replace(/\n?INFERRED_DOMAIN:\s*.+\s*$/i, '').trimEnd();
+export function parseTitleFromResponse(text: string, fallback: string): string {
+  const match = text.match(/INFERRED_TITLE:\s*(.+)/);
+  const raw = match ? match[1].trim() : '';
+  const cleaned = raw.replace(/^["'`*_]+|["'`*_]+$/g, '').trim();
+  const candidate = cleaned || fallback.trim();
+  if (candidate.length <= MAX_TITLE_LENGTH) return candidate;
+  return `${candidate.slice(0, MAX_TITLE_LENGTH - 1).trimEnd()}…`;
+}
+
+export function stripInferredMetadata(text: string): string {
+  return text
+    .replace(/\n?INFERRED_DOMAIN:\s*.+/gi, '')
+    .replace(/\n?INFERRED_TITLE:\s*.+/gi, '')
+    .trimEnd();
 }
