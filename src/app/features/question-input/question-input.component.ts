@@ -176,7 +176,7 @@ export class QuestionInputComponent {
   protected readonly error = signal<string | null>(null);
   protected draft = '';
 
-  readonly hasApiKey = computed(() => !!this.storage.getApiKey());
+  readonly hasApiKey = computed(() => !!this.storage.apiKey());
   readonly canGenerate = computed(() => this.hasApiKey() && !this.loading());
 
   readonly generated = output<Question>();
@@ -199,7 +199,10 @@ export class QuestionInputComponent {
     try {
       const domains = this.settings.domains();
       const certName = this.settings.certificationName();
-      const raw = await this.anthropic.generateReview(text, apiKey, certName, domains);
+      const awsOptions = apiKey.startsWith('AEA')
+        ? { workspaceId: this.settings.awsWorkspaceId(), region: this.settings.awsRegion() }
+        : undefined;
+      const raw = await this.anthropic.generateReview(text, apiKey, certName, domains, awsOptions);
       const domain = parseDomainFromResponse(raw, domains);
       const review = stripInferredDomainLine(raw);
 

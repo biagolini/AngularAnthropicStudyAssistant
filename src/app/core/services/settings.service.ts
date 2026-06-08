@@ -15,6 +15,8 @@ export class SettingsService {
   readonly hasDomains = computed(() => this.state().domains.length > 0);
   readonly domainCount = computed(() => this.state().domains.length);
   readonly canAddDomain = computed(() => this.state().domains.length < MAX_DOMAINS);
+  readonly awsWorkspaceId = computed(() => this.state().awsWorkspaceId);
+  readonly awsRegion = computed(() => this.state().awsRegion);
 
   setCertificationName(name: string): void {
     const trimmed = name.trim();
@@ -42,6 +44,14 @@ export class SettingsService {
 
   setTheme(theme: ThemeMode): void {
     this.update((s) => ({ ...s, theme }));
+  }
+
+  setAwsWorkspaceId(value: string): void {
+    this.update((s) => ({ ...s, awsWorkspaceId: value.trim() }));
+  }
+
+  setAwsRegion(value: string): void {
+    this.update((s) => ({ ...s, awsRegion: value.trim() || 'us-east-1' }));
   }
 
   private update(updater: (current: AppSettings) => AppSettings): void {

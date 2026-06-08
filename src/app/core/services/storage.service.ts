@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { AppSettings, DEFAULT_SETTINGS } from '../models/settings.model';
 import { Question } from '../models/question.model';
 
@@ -9,16 +9,21 @@ const KEY_SETTINGS = `${PREFIX}settings`;
 
 @Injectable({ providedIn: 'root' })
 export class StorageService {
+  private readonly apiKeyState = signal<string | null>(this.read(KEY_API));
+  readonly apiKey = this.apiKeyState.asReadonly();
+
   getApiKey(): string | null {
-    return this.read(KEY_API);
+    return this.apiKeyState();
   }
 
   setApiKey(key: string): void {
     this.write(KEY_API, key);
+    this.apiKeyState.set(key);
   }
 
   clearApiKey(): void {
     this.remove(KEY_API);
+    this.apiKeyState.set(null);
   }
 
   getQuestions(): Question[] {
@@ -49,6 +54,8 @@ export class StorageService {
         certificationName: typeof parsed.certificationName === 'string' ? parsed.certificationName : DEFAULT_SETTINGS.certificationName,
         domains: Array.isArray(parsed.domains) ? parsed.domains.filter((d): d is string => typeof d === 'string') : [],
         theme: parsed.theme === 'dark' ? 'dark' : 'light',
+        awsWorkspaceId: typeof parsed.awsWorkspaceId === 'string' ? parsed.awsWorkspaceId : DEFAULT_SETTINGS.awsWorkspaceId,
+        awsRegion: typeof parsed.awsRegion === 'string' && parsed.awsRegion ? parsed.awsRegion : DEFAULT_SETTINGS.awsRegion,
       };
     } catch {
       return { ...DEFAULT_SETTINGS };

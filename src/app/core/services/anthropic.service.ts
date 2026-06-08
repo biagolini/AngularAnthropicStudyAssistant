@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
+import { isAwsApiKey } from '../models/settings.model';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
+const ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
 const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_TOKENS = 2000;
 
@@ -15,38 +16,127 @@ interface AnthropicResponse {
   error?: { type?: string; message?: string };
 }
 
+export interface AwsRoutingOptions {
+  workspaceId: string;
+  region: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AnthropicService {
+  async refineReview(
+    currentReview: string,
+    feedback: string,
+    apiKey: string,
+    certName: string,
+    domains: string[],
+    aws?: AwsRoutingOptions,
+  ): Promise<string> {
+    const trimmedFeedback = feedback.trim();
+    if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
+    if (!currentReview.trim()) throw new Error('No review to refine.');
+
+    const system = buildSystemPrompt(certName, domains);
+    const userMessage = `You previously generated the exam review below. Refine it based on the user's feedback while keeping the SAME OUTPUT FORMAT specified in your instructions.
+
+=== CURRENT REVIEW ===
+${currentReview}
+
+=== USER FEEDBACK ===
+${trimmedFeedback}
+
+Return the FULL refined review. Apply only the changes needed to address the feedback; preserve everything else.`;
+
+    return this.callMessages(
+      apiKey,
+      aws,
+      system,
+      [{ role: 'user', content: userMessage }],
+    );
+  }
+
+  async testConnection(apiKey: string, aws?: AwsRoutingOptions): Promise<void> {
+    if (!apiKey) throw new Error('Missing API key.');
+    const useAws = isAwsApiKey(apiKey);
+    if (useAws && (!aws?.workspaceId || !aws.region)) {
+      throw new Error('Workspace ID and region are required for AWS keys.');
+    }
+
+    const base = useAws
+      ? `https://aws-external-anthropic.${aws!.region}.api.aws`
+      : 'https://api.anthropic.com';
+    const headers: Record<string, string> = {
+      'x-api-key': apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+    };
+    if (useAws) {
+      headers['anthropic-workspace-id'] = aws!.workspaceId;
+    } else {
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+
+    const response = await fetch(`${base}/v1/models?limit=1`, { method: 'GET', headers });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as AnthropicResponse | null;
+      const message = data?.error?.message ?? `Request failed with status ${response.status}.`;
+      throw new Error(message);
+    }
+  }
+
   async generateReview(
     question: string,
     apiKey: string,
     certName: string,
     domains: string[],
+    aws?: AwsRoutingOptions,
   ): Promise<string> {
-    if (!apiKey) throw new Error('Missing API key.');
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
-
     const system = buildSystemPrompt(certName, domains);
+    return this.callMessages(
+      apiKey,
+      aws,
+      system,
+      [{ role: 'user', content: trimmedQuestion }],
+    );
+  }
 
-    const response = await fetch(ANTHROPIC_URL, {
+  private async callMessages(
+    apiKey: string,
+    aws: AwsRoutingOptions | undefined,
+    system: string,
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ): Promise<string> {
+    if (!apiKey) throw new Error('Missing API key.');
+    const useAws = isAwsApiKey(apiKey);
+    if (useAws && (!aws?.workspaceId || !aws.region)) {
+      throw new Error(
+        'Claude Platform on AWS keys require a workspace ID and region. Open Settings to fill them in.',
+      );
+    }
+
+    const url = useAws
+      ? `https://aws-external-anthropic.${aws!.region}.api.aws/v1/messages`
+      : ANTHROPIC_URL;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+    };
+    if (useAws) {
+      headers['anthropic-workspace-id'] = aws!.workspaceId;
+    } else {
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers,
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
         max_tokens: MAX_TOKENS,
         system,
-        messages: [
-          {
-            role: 'user',
-            content: trimmedQuestion,
-          },
-        ],
+        messages,
       }),
     });
 

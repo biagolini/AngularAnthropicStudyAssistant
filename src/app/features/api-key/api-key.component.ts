@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { StorageService } from '../../core/services/storage.service';
 import { EyeToggleComponent } from '../../shared/components/eye-toggle.component';
 
-const KEY_PREFIX = 'sk-ant-';
+const ALLOWED_PREFIXES = ['sk-ant-', 'AEA'] as const;
 
 @Component({
   selector: 'app-api-key',
@@ -15,7 +15,7 @@ const KEY_PREFIX = 'sk-ant-';
       <header class="section-header">
         <h3>API Key</h3>
         <p class="notice">
-          Your API key is stored in this browser's local storage. Usage is billed to your Anthropic account.
+          Your API key is stored in this browser's local storage. Usage is billed to your Anthropic account (keys starting with <code>sk-ant-</code>) or to your AWS account (Claude Platform on AWS keys starting with <code>AEA</code>).
         </p>
       </header>
 
@@ -25,7 +25,7 @@ const KEY_PREFIX = 'sk-ant-';
             <input
               [type]="visible() ? 'text' : 'password'"
               [(ngModel)]="draft"
-              placeholder="sk-ant-..."
+              placeholder="sk-ant-... or AEA..."
               autocomplete="off"
               spellcheck="false"
               aria-label="Anthropic API key"
@@ -150,7 +150,7 @@ const KEY_PREFIX = 'sk-ant-';
 export class ApiKeyComponent {
   private readonly storage = inject(StorageService);
 
-  private readonly storedKey = signal<string | null>(this.storage.getApiKey());
+  private readonly storedKey = this.storage.apiKey;
   protected readonly visible = signal(false);
   protected readonly editing = signal(this.storedKey() === null);
   protected readonly error = signal<string | null>(null);
@@ -162,8 +162,10 @@ export class ApiKeyComponent {
   readonly maskedKey = computed(() => {
     const key = this.storedKey();
     if (!key) return '';
+    const prefix = ALLOWED_PREFIXES.find((p) => key.startsWith(p)) ?? key.slice(0, 3);
     const tail = key.slice(-4);
-    return `${KEY_PREFIX}${'*'.repeat(Math.max(4, key.length - KEY_PREFIX.length - 4))}${tail}`;
+    const stars = Math.max(4, key.length - prefix.length - 4);
+    return `${prefix}${'*'.repeat(stars)}${tail}`;
   });
 
   toggleVisibility(): void {
@@ -189,12 +191,12 @@ export class ApiKeyComponent {
       this.error.set('API key cannot be empty.');
       return;
     }
-    if (!value.startsWith(KEY_PREFIX)) {
-      this.error.set(`Key must start with "${KEY_PREFIX}".`);
+    const validPrefix = ALLOWED_PREFIXES.some((p) => value.startsWith(p));
+    if (!validPrefix) {
+      this.error.set('Key must start with "sk-ant-" (Anthropic Console) or "AEA" (Claude Platform on AWS).');
       return;
     }
     this.storage.setApiKey(value);
-    this.storedKey.set(value);
     this.draft = '';
     this.visible.set(false);
     this.editing.set(false);

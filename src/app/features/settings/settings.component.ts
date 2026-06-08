@@ -1,8 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AWS_REGIONS, isAwsApiKey } from '../../core/models/settings.model';
+import { AnthropicService } from '../../core/services/anthropic.service';
 import { QuestionsService } from '../../core/services/questions.service';
 import { SettingsService } from '../../core/services/settings.service';
+import { StorageService } from '../../core/services/storage.service';
 import { ApiKeyComponent } from '../api-key/api-key.component';
+
+type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
 
 @Component({
   selector: 'app-settings',
@@ -113,6 +118,106 @@ import { ApiKeyComponent } from '../api-key/api-key.component';
           <app-api-key />
         </section>
 
+        @if (showAwsBlock()) {
+          <section class="block aws-block">
+            <header class="section-header">
+              <div class="title-row">
+                <h3>Claude Platform on AWS</h3>
+                <button
+                  type="button"
+                  class="info-btn"
+                  (click)="openAwsInfo()"
+                  aria-label="What is Claude Platform on AWS"
+                >
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                    <path d="M12 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <circle cx="12" cy="8" r="1" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+              <p class="helper">
+                Required when your API key starts with <code>AEA</code>. Workspace ID and region are sent on every request to <code>aws-external-anthropic.&lt;region&gt;.api.aws</code>.
+              </p>
+            </header>
+
+            <label class="field">
+              <span class="field-label">Workspace ID</span>
+              <input
+                class="text-input"
+                type="text"
+                placeholder="wrkspc_..."
+                [ngModel]="workspaceId()"
+                (ngModelChange)="onWorkspaceIdChange($event)"
+                (blur)="commitWorkspaceId()"
+                (keyup.enter)="commitWorkspaceId()"
+                aria-label="AWS workspace ID"
+              />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Region</span>
+              <select
+                class="text-input"
+                [ngModel]="region()"
+                (ngModelChange)="onRegionChange($event)"
+                aria-label="AWS region"
+              >
+                @for (r of regions; track r) {
+                  <option [value]="r">{{ r }}</option>
+                }
+              </select>
+            </label>
+
+            @if (awsKeyButNoWorkspace()) {
+              <p class="error">Workspace ID is required for AWS keys.</p>
+            }
+          </section>
+        }
+
+        @if (hasApiKey()) {
+          <section class="block test-block">
+            <header class="section-header">
+              <h3>Connection check</h3>
+              <p class="helper">
+                Sends a tiny <code>GET /v1/models</code> request to validate auth and routing. No tokens are consumed.
+              </p>
+            </header>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              (click)="onTestConnection()"
+              [disabled]="testStatus() === 'testing' || awsKeyButNoWorkspace()"
+            >
+              @if (testStatus() === 'testing') {
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Testing...</span>
+              } @else {
+                <span>Test connection</span>
+              }
+            </button>
+
+            @if (testStatus() === 'ok') {
+              <p class="status status-ok">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                  <path d="M8 12l3 3 5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Connection OK ({{ testEndpoint() }})
+              </p>
+            }
+            @if (testStatus() === 'failed') {
+              <p class="status status-failed">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                  <path d="M9 9l6 6M15 9l-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+                {{ testError() }}
+              </p>
+            }
+          </section>
+        }
+
         <section class="block danger">
           <header class="section-header">
             <h3>Danger Zone</h3>
@@ -139,6 +244,41 @@ import { ApiKeyComponent } from '../api-key/api-key.component';
             <div class="confirm-actions">
               <button type="button" class="btn btn-ghost" (click)="onCancelClear()">Cancel</button>
               <button type="button" class="btn btn-danger" (click)="onConfirmClear()">Delete all</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (awsInfoOpen()) {
+        <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="aws-info-title" (click)="closeAwsInfo()">
+          <div class="confirm aws-info" (click)="$event.stopPropagation()">
+            <h3 id="aws-info-title">Claude Platform on AWS</h3>
+            <p>
+              A native AWS integration launched in May 2026 that lets organizations access Anthropic's full Claude developer platform through their existing AWS account. Anthropic still operates the inference; AWS provides the authentication layer (IAM/SigV4 or API key), consolidated billing via Marketplace, and audit through CloudTrail.
+            </p>
+            <p>
+              Unlike Amazon Bedrock — where AWS operates the inference — Claude Platform on AWS keeps Anthropic as the inference operator, so your team gets same-day access to the latest models with billing routed through AWS.
+            </p>
+            <p>
+              <strong>To get a key:</strong> subscribe in the AWS Console, link an Anthropic organization, create a workspace, enable outbound web identity federation, and generate a long-term key.
+            </p>
+            <p>
+              For a step-by-step walkthrough, see:
+            </p>
+            <ul class="aws-links">
+              <li>
+                <a href="https://medium.com/@biagolini/getting-started-with-claude-platform-on-aws-9a2c1ed9b3bc" target="_blank" rel="noopener">
+                  Getting Started with Claude Platform on AWS (English)
+                </a>
+              </li>
+              <li>
+                <a href="https://builder.aws.com/content/3Ek6QX9d8ea545kjglmS2UcBlsk/primeiros-passos-com-o-claude-platform-na-aws" target="_blank" rel="noopener">
+                  Primeiros passos com o Claude Platform na AWS (Português)
+                </a>
+              </li>
+            </ul>
+            <div class="confirm-actions">
+              <button type="button" class="btn btn-primary" (click)="closeAwsInfo()">Got it</button>
             </div>
           </div>
         </div>
@@ -270,6 +410,100 @@ import { ApiKeyComponent } from '../api-key/api-key.component';
         background: var(--color-red);
         color: #ffffff;
       }
+      .btn-secondary {
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        border: 1px solid var(--bg-border);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-sm);
+        align-self: flex-start;
+      }
+      .btn-secondary:hover:not(:disabled) {
+        border-color: var(--color-purple);
+        background: var(--bg-subtle);
+      }
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+        margin-bottom: var(--space-xs);
+      }
+      .title-row h3 {
+        margin-bottom: 0;
+      }
+      .info-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-pill);
+        color: var(--text-muted);
+      }
+      .info-btn:hover {
+        color: var(--color-blue);
+        background: var(--bg-subtle);
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        font-size: var(--font-size-sm);
+        padding: var(--space-xs) var(--space-sm);
+        border-radius: var(--radius-md);
+      }
+      .status-ok {
+        color: var(--color-green);
+        background: rgba(0, 184, 148, 0.08);
+      }
+      .status-failed {
+        color: var(--color-red);
+        background: rgba(214, 48, 49, 0.08);
+        line-height: 1.4;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--bg-border);
+        border-top-color: var(--color-purple);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .aws-info {
+        max-width: 480px;
+      }
+      .aws-info p {
+        font-size: var(--font-size-base);
+        line-height: 1.55;
+      }
+      .aws-info code {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        background: var(--bg-elevated);
+        padding: 1px 6px;
+        border-radius: var(--radius-sm);
+      }
+      .aws-links {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+        padding-left: var(--space-md);
+      }
+      .aws-links li {
+        list-style: disc;
+        color: var(--text-secondary);
+      }
+      .aws-links a {
+        color: var(--color-blue);
+        word-break: break-word;
+      }
+      .aws-links a:hover {
+        text-decoration: underline;
+      }
       .count {
         font-size: var(--font-size-sm);
         color: var(--text-faint);
@@ -355,11 +589,15 @@ import { ApiKeyComponent } from '../api-key/api-key.component';
 export class SettingsComponent {
   private readonly settings = inject(SettingsService);
   private readonly questionsService = inject(QuestionsService);
+  private readonly storage = inject(StorageService);
+  private readonly anthropic = inject(AnthropicService);
 
   protected readonly certNameDraft = signal(this.settings.certificationName());
+  protected readonly workspaceIdDraft = signal(this.settings.awsWorkspaceId());
   protected readonly domainError = signal<string | null>(null);
   protected readonly confirmingClear = signal(false);
   protected domainDraft = '';
+  protected readonly regions = AWS_REGIONS;
 
   readonly closed = output<void>();
 
@@ -367,6 +605,19 @@ export class SettingsComponent {
   readonly domains = this.settings.domains;
   readonly canAdd = this.settings.canAddDomain;
   readonly questionCount = this.questionsService.count;
+  readonly workspaceId = computed(() => this.workspaceIdDraft());
+  readonly region = this.settings.awsRegion;
+
+  readonly showAwsBlock = computed(() => (this.storage.apiKey() ?? '').startsWith('AEA'));
+  readonly awsKeyButNoWorkspace = computed(
+    () => this.showAwsBlock() && !this.workspaceId().trim(),
+  );
+  readonly hasApiKey = computed(() => !!this.storage.apiKey());
+
+  protected readonly testStatus = signal<TestStatus>('idle');
+  protected readonly testError = signal<string>('');
+  protected readonly testEndpoint = signal<string>('');
+  protected readonly awsInfoOpen = signal(false);
 
   onCertNameChange(value: string): void {
     this.certNameDraft.set(value);
@@ -409,5 +660,64 @@ export class SettingsComponent {
   onConfirmClear(): void {
     this.questionsService.clearAll();
     this.confirmingClear.set(false);
+  }
+
+  onWorkspaceIdChange(value: string): void {
+    this.workspaceIdDraft.set(value);
+  }
+
+  commitWorkspaceId(): void {
+    this.settings.setAwsWorkspaceId(this.workspaceIdDraft());
+  }
+
+  onRegionChange(value: string): void {
+    this.settings.setAwsRegion(value);
+    this.resetTestStatus();
+  }
+
+  openAwsInfo(): void {
+    this.awsInfoOpen.set(true);
+  }
+
+  closeAwsInfo(): void {
+    this.awsInfoOpen.set(false);
+  }
+
+  resetTestStatus(): void {
+    if (this.testStatus() !== 'idle') {
+      this.testStatus.set('idle');
+      this.testError.set('');
+      this.testEndpoint.set('');
+    }
+  }
+
+  async onTestConnection(): Promise<void> {
+    const key = this.storage.apiKey();
+    if (!key) {
+      this.testStatus.set('failed');
+      this.testError.set('No API key saved.');
+      return;
+    }
+    this.testStatus.set('testing');
+    this.testError.set('');
+    this.testEndpoint.set('');
+
+    const useAws = isAwsApiKey(key);
+    const region = this.settings.awsRegion();
+    const workspace = this.settings.awsWorkspaceId();
+
+    try {
+      await this.anthropic.testConnection(
+        key,
+        useAws ? { workspaceId: workspace, region } : undefined,
+      );
+      this.testStatus.set('ok');
+      this.testEndpoint.set(
+        useAws ? `aws-external-anthropic.${region}.api.aws` : 'api.anthropic.com',
+      );
+    } catch (err) {
+      this.testStatus.set('failed');
+      this.testError.set(err instanceof Error ? err.message : 'Connection failed.');
+    }
   }
 }

@@ -42,6 +42,15 @@ export class QuestionsService {
     this.persist(next);
   }
 
+  updateReview(id: string, review: string): void {
+    const trimmed = review.trim();
+    if (!trimmed) return;
+    const next = this.state().map((q) =>
+      q.id === id ? { ...q, review: trimmed } : q,
+    );
+    this.persist(next);
+  }
+
   remove(id: string): void {
     this.persist(this.state().filter((q) => q.id !== id));
     this.deselect(id);
