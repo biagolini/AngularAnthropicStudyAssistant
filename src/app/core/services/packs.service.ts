@@ -14,6 +14,7 @@ export interface PackDraft {
   version: string;
   domains: string[];
   color: string;
+  enabledMcps: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -44,6 +45,7 @@ export class PacksService {
   readonly activeName = computed(() => this.activePack().name);
   readonly activeDomains = computed(() => this.activePack().domains);
   readonly activeColor = computed(() => this.activePack().color);
+  readonly activeEnabledMcps = computed(() => this.activePack().enabledMcps);
 
   create(draft: PackDraft): Pack {
     const now = Date.now();
@@ -53,6 +55,7 @@ export class PacksService {
       version: draft.version.trim(),
       domains: this.normalizeDomains(draft.domains),
       color: isValidPackColor(draft.color) ? draft.color : DEFAULT_PACK_COLOR,
+      enabledMcps: [...(draft.enabledMcps ?? [])],
       createdAt: now,
       updatedAt: now,
     };
@@ -71,6 +74,7 @@ export class PacksService {
             version: draft.version.trim(),
             domains: this.normalizeDomains(draft.domains),
             color: isValidPackColor(draft.color) ? draft.color : p.color,
+            enabledMcps: [...(draft.enabledMcps ?? [])],
             updatedAt: Date.now(),
           }
         : p,
@@ -142,6 +146,7 @@ export class PacksService {
       version: '',
       domains: [],
       color: DEFAULT_PACK_COLOR,
+      enabledMcps: [],
       createdAt: now,
       updatedAt: now,
     };

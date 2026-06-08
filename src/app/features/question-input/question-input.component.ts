@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AnthropicService } from '../../core/services/anthropic.service';
+import { resolveEnabledMcps } from '../../core/models/mcp.model';
 import { ModelsService } from '../../core/services/models.service';
 import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
@@ -43,20 +44,33 @@ import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.com
         ></textarea>
       </label>
 
-      <label class="model-row">
-        <span class="model-label">Model</span>
-        <select
-          class="model-select"
-          [ngModel]="selectedModel()"
-          (ngModelChange)="onSelectModel($event)"
-          [disabled]="streaming()"
-          aria-label="Model for this generation"
-        >
-          @for (model of availableModels(); track model.id) {
-            <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
-          }
-        </select>
-      </label>
+      <div class="options-row">
+        <label class="model-row">
+          <span class="model-label">Model</span>
+          <select
+            class="model-select"
+            [ngModel]="selectedModel()"
+            (ngModelChange)="onSelectModel($event)"
+            [disabled]="streaming()"
+            aria-label="Model for this generation"
+          >
+            @for (model of availableModels(); track model.id) {
+              <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="search-toggle">
+          <input
+            type="checkbox"
+            [checked]="webSearchActive()"
+            (change)="onToggleWebSearch($event)"
+            [disabled]="streaming()"
+            aria-label="Use web search for this generation"
+          />
+          <span>Web search</span>
+        </label>
+      </div>
 
       @if (streaming()) {
         <button type="button" class="stop-btn" (click)="onStop()">
@@ -113,6 +127,11 @@ import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.com
         border: 1px solid var(--color-amber);
         font-size: var(--font-size-sm);
       }
+      .options-row {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+      }
       .model-row {
         display: flex;
         align-items: center;
@@ -139,6 +158,17 @@ import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.com
       .model-select:disabled {
         opacity: 0.55;
         cursor: not-allowed;
+      }
+      .search-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .search-toggle input[type='checkbox'] {
+        accent-color: var(--color-purple);
       }
       .textarea-wrap {
         display: block;
@@ -240,6 +270,7 @@ export class QuestionInputComponent {
   protected readonly streaming = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly modelOverride = signal<string | null>(null);
+  protected readonly webSearchOverride = signal<boolean | null>(null);
   protected draft = '';
   private streamController: AbortController | null = null;
 
@@ -249,11 +280,19 @@ export class QuestionInputComponent {
   readonly selectedModel = computed(
     () => this.modelOverride() ?? this.modelsService.resolveModel(this.settings.defaultModel()),
   );
+  readonly webSearchActive = computed(
+    () => this.webSearchOverride() ?? this.settings.webSearchEnabled(),
+  );
 
   readonly generated = output<Question>();
 
   onSelectModel(value: string): void {
     this.modelOverride.set(value);
+  }
+
+  onToggleWebSearch(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.webSearchOverride.set(checked);
   }
 
   async onGenerate(): Promise<void> {
@@ -285,6 +324,11 @@ export class QuestionInputComponent {
         ? { workspaceId: this.settings.awsWorkspaceId(), region: this.settings.awsRegion() }
         : undefined;
 
+      const extras = {
+        enableWebSearch: this.webSearchActive(),
+        mcpServers: resolveEnabledMcps(activePack.enabledMcps),
+      };
+
       for await (const chunk of this.anthropic.streamReview(
         text,
         apiKey,
@@ -293,6 +337,7 @@ export class QuestionInputComponent {
         awsOptions,
         this.selectedModel(),
         controller.signal,
+        extras,
       )) {
         accumulated += chunk;
         if (!question) {
@@ -319,6 +364,7 @@ export class QuestionInputComponent {
         this.questionsService.updatePartial(question.id, { title, domain, review });
       }
       this.modelOverride.set(null);
+      this.webSearchOverride.set(null);
     } catch (err) {
       const aborted = (err as Error)?.name === 'AbortError' || controller.signal.aborted;
       if (question) {

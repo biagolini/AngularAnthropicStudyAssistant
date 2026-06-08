@@ -82,6 +82,21 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
             @if (modelsError()) {
               <p class="error">{{ modelsError() }}</p>
             }
+
+            <label class="toggle-row">
+              <input
+                type="checkbox"
+                [checked]="webSearchDefault()"
+                (change)="onToggleWebSearchDefault($event)"
+                aria-label="Enable web search by default"
+              />
+              <span class="toggle-meta">
+                <span class="toggle-title">Web search by default</span>
+                <span class="toggle-hint">
+                  When on, the model can call Anthropic's web_search tool during Generate and Refine. Costs ~$10 per 1000 searches and adds 3-8s latency.
+                </span>
+              </span>
+            </label>
           </section>
         }
 
@@ -478,6 +493,35 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
         font-size: var(--font-size-sm);
         color: var(--text-faint);
       }
+      .toggle-row {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-sm);
+        margin-top: var(--space-sm);
+        padding: var(--space-sm);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--bg-border);
+        background: var(--bg-elevated);
+        cursor: pointer;
+      }
+      .toggle-row input[type='checkbox'] {
+        margin-top: 3px;
+        accent-color: var(--color-purple);
+      }
+      .toggle-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .toggle-title {
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .toggle-hint {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        line-height: 1.4;
+      }
       .error {
         color: var(--color-red);
         font-size: var(--font-size-sm);
@@ -582,6 +626,7 @@ export class SettingsComponent {
   readonly modelsLoading = this.modelsService.loading;
   readonly modelsError = this.modelsService.error;
   readonly defaultModel = this.settings.defaultModel;
+  readonly webSearchDefault = this.settings.webSearchEnabled;
 
   protected readonly testStatus = signal<TestStatus>('idle');
   protected readonly testError = signal<string>('');
@@ -616,6 +661,11 @@ export class SettingsComponent {
 
   onDefaultModelChange(value: string): void {
     this.settings.setDefaultModel(value);
+  }
+
+  onToggleWebSearchDefault(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.settings.setWebSearchEnabled(checked);
   }
 
   refreshModels(): void {

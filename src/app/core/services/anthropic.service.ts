@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { MCP_BETA_HEADER, McpServerEntry } from '../models/mcp.model';
 import { DEFAULT_MODEL, isAwsApiKey } from '../models/settings.model';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
@@ -18,6 +19,11 @@ interface AnthropicResponse {
 export interface AwsRoutingOptions {
   workspaceId: string;
   region: string;
+}
+
+export interface CallExtras {
+  enableWebSearch?: boolean;
+  mcpServers?: McpServerEntry[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -169,6 +175,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     aws: AwsRoutingOptions | undefined,
     model: string | undefined,
     signal: AbortSignal,
+    extras?: CallExtras,
   ): AsyncGenerator<string, void, void> {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
@@ -180,6 +187,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
       [{ role: 'user', content: trimmedQuestion }],
       model,
       signal,
+      extras,
     );
   }
 
@@ -192,6 +200,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     aws: AwsRoutingOptions | undefined,
     model: string | undefined,
     signal: AbortSignal,
+    extras?: CallExtras,
   ): AsyncGenerator<string, void, void> {
     const trimmedFeedback = feedback.trim();
     if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
@@ -215,6 +224,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
       [{ role: 'user', content: userMessage }],
       model,
       signal,
+      extras,
     );
   }
 
@@ -225,6 +235,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     model: string | undefined,
     signal: AbortSignal,
+    extras?: CallExtras,
   ): AsyncGenerator<string, void, void> {
     if (!apiKey) throw new Error('Missing API key.');
     const useAws = isAwsApiKey(apiKey);
@@ -250,16 +261,33 @@ Return the FULL refined review. Apply only the changes needed to address the fee
       headers['anthropic-dangerous-direct-browser-access'] = 'true';
     }
 
+    const mcpServers = extras?.mcpServers ?? [];
+    if (mcpServers.length > 0) {
+      headers['anthropic-beta'] = MCP_BETA_HEADER;
+    }
+
+    const body: Record<string, unknown> = {
+      model: model || DEFAULT_MODEL,
+      max_tokens: MAX_TOKENS,
+      system,
+      messages,
+      stream: true,
+    };
+    if (extras?.enableWebSearch) {
+      body['tools'] = [{ type: 'web_search_20250305', name: 'web_search' }];
+    }
+    if (mcpServers.length > 0) {
+      body['mcp_servers'] = mcpServers.map((entry) => ({
+        type: 'url',
+        url: entry.url,
+        name: entry.id,
+      }));
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: model || DEFAULT_MODEL,
-        max_tokens: MAX_TOKENS,
-        system,
-        messages,
-        stream: true,
-      }),
+      body: JSON.stringify(body),
       signal,
     });
 

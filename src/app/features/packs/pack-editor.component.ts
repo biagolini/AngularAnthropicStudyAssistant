@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MCP_CATALOG } from '../../core/models/mcp.model';
 import {
   DEFAULT_PACK_COLOR,
   MAX_PACK_DOMAINS,
@@ -80,6 +81,33 @@ import { QuestionsService } from '../../core/services/questions.service';
               }
             </div>
           </div>
+
+          @if (mcpCatalog.length > 0) {
+            <div class="field">
+              <span class="field-label">External knowledge (MCP)</span>
+              <span class="field-hint">
+                When enabled, the model can call these servers during Generate / Refine to look up authoritative content. Off by default.
+              </span>
+              <ul class="mcp-list">
+                @for (entry of mcpCatalog; track entry.id) {
+                  <li class="mcp-row">
+                    <label class="mcp-label">
+                      <input
+                        type="checkbox"
+                        [checked]="isMcpEnabled(entry.id)"
+                        (change)="toggleMcp(entry.id)"
+                        [attr.aria-label]="'Enable ' + entry.name"
+                      />
+                      <span class="mcp-meta">
+                        <span class="mcp-name">{{ entry.name }}</span>
+                        <span class="mcp-desc">{{ entry.description }}</span>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
 
           <div class="field">
             <span class="field-label">Knowledge Domains</span>
@@ -287,6 +315,49 @@ import { QuestionsService } from '../../core/services/questions.service';
       .domain-input .text-input {
         flex: 1;
       }
+      .mcp-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
+      .mcp-row {
+        list-style: none;
+      }
+      .mcp-label {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-sm);
+        padding: var(--space-sm);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--bg-border);
+        background: var(--bg-elevated);
+        cursor: pointer;
+        transition: border-color var(--transition-fast);
+      }
+      .mcp-label:hover {
+        border-color: var(--color-purple);
+      }
+      .mcp-label input[type='checkbox'] {
+        margin-top: 3px;
+        accent-color: var(--color-purple);
+        flex-shrink: 0;
+      }
+      .mcp-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .mcp-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: var(--font-size-base);
+      }
+      .mcp-desc {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        line-height: 1.45;
+      }
       .btn {
         min-height: var(--touch-min);
         padding: 0 var(--space-md);
@@ -425,12 +496,14 @@ export class PackEditorComponent {
 
   protected readonly colors = PACK_COLORS;
   protected readonly maxDomains = MAX_PACK_DOMAINS;
+  protected readonly mcpCatalog = MCP_CATALOG;
 
   protected nameDraft = '';
   protected versionDraft = '';
   protected domainDraft = '';
   protected readonly colorDraft = signal<string>(DEFAULT_PACK_COLOR);
   protected readonly domainsDraft = signal<string[]>([]);
+  protected readonly mcpsDraft = signal<string[]>([]);
   protected readonly domainError = signal<string | null>(null);
   protected readonly confirmingDelete = signal(false);
 
@@ -449,6 +522,7 @@ export class PackEditorComponent {
       this.versionDraft = p?.version ?? '';
       this.colorDraft.set(p?.color ?? DEFAULT_PACK_COLOR);
       this.domainsDraft.set(p ? [...p.domains] : []);
+      this.mcpsDraft.set(p ? [...(p.enabledMcps ?? [])] : []);
       this.domainDraft = '';
       this.domainError.set(null);
       this.confirmingDelete.set(false);
@@ -485,12 +559,24 @@ export class PackEditorComponent {
     this.domainsDraft.set(this.domainsDraft().filter((d) => d !== domain));
   }
 
+  isMcpEnabled(id: string): boolean {
+    return this.mcpsDraft().includes(id);
+  }
+
+  toggleMcp(id: string): void {
+    const current = this.mcpsDraft();
+    this.mcpsDraft.set(
+      current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id],
+    );
+  }
+
   onSave(): void {
     const draft = {
       name: this.nameDraft.trim(),
       version: this.versionDraft.trim(),
       domains: this.domainsDraft(),
       color: this.colorDraft(),
+      enabledMcps: this.mcpsDraft(),
     };
     if (!draft.name) return;
     const existing = this.pack();

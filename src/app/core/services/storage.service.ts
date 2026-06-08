@@ -71,6 +71,9 @@ export class StorageService {
           version: typeof p.version === 'string' ? p.version : '',
           domains: Array.isArray(p.domains) ? p.domains.filter((d): d is string => typeof d === 'string') : [],
           color: typeof p.color === 'string' && p.color ? p.color : DEFAULT_PACK_COLOR,
+          enabledMcps: Array.isArray(p.enabledMcps)
+            ? p.enabledMcps.filter((id): id is string => typeof id === 'string')
+            : [],
           createdAt: typeof p.createdAt === 'number' ? p.createdAt : Date.now(),
           updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : Date.now(),
         }));
@@ -94,6 +97,7 @@ export class StorageService {
         awsRegion: typeof parsed.awsRegion === 'string' && parsed.awsRegion ? parsed.awsRegion : DEFAULT_SETTINGS.awsRegion,
         defaultModel: typeof parsed.defaultModel === 'string' && parsed.defaultModel ? parsed.defaultModel : DEFAULT_SETTINGS.defaultModel,
         activePackId: typeof parsed.activePackId === 'string' ? parsed.activePackId : DEFAULT_SETTINGS.activePackId,
+        webSearchEnabled: typeof parsed.webSearchEnabled === 'boolean' ? parsed.webSearchEnabled : DEFAULT_SETTINGS.webSearchEnabled,
       };
     } catch {
       return { ...DEFAULT_SETTINGS };
@@ -135,6 +139,7 @@ export class StorageService {
       version: '',
       domains: legacyDomains,
       color: DEFAULT_PACK_COLOR,
+      enabledMcps: [],
       createdAt: now,
       updatedAt: now,
     };

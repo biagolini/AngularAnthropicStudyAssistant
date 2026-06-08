@@ -14,6 +14,7 @@ export class SettingsService {
   readonly awsRegion = computed(() => this.state().awsRegion);
   readonly defaultModel = computed(() => this.state().defaultModel);
   readonly activePackId = computed(() => this.state().activePackId);
+  readonly webSearchEnabled = computed(() => this.state().webSearchEnabled);
 
   setTheme(theme: ThemeMode): void {
     this.update((s) => ({ ...s, theme }));
@@ -34,6 +35,11 @@ export class SettingsService {
   setActivePackId(id: string): void {
     if (id === this.state().activePackId) return;
     this.update((s) => ({ ...s, activePackId: id }));
+  }
+
+  setWebSearchEnabled(value: boolean): void {
+    if (value === this.state().webSearchEnabled) return;
+    this.update((s) => ({ ...s, webSearchEnabled: value }));
   }
 
   private update(updater: (current: AppSettings) => AppSettings): void {

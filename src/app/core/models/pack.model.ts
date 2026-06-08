@@ -4,6 +4,7 @@ export interface Pack {
   version: string;
   domains: string[];
   color: string;
+  enabledMcps: string[];
   createdAt: number;
   updatedAt: number;
 }

@@ -6,6 +6,7 @@ export interface AppSettings {
   awsRegion: string;
   defaultModel: string;
   activePackId: string;
+  webSearchEnabled: boolean;
 }
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   awsRegion: 'us-east-1',
   defaultModel: DEFAULT_MODEL,
   activePackId: '',
+  webSearchEnabled: false,
 };
 
 export const DEFAULT_DOMAIN = 'General';

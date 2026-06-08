@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { FormsModule } from '@angular/forms';
 import { Question } from '../../core/models/question.model';
 import { AnthropicService } from '../../core/services/anthropic.service';
+import { resolveEnabledMcps } from '../../core/models/mcp.model';
 import { ModelsService } from '../../core/services/models.service';
 import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
@@ -132,20 +133,32 @@ import { MarkdownRendererComponent } from './markdown-renderer.component';
                 [disabled]="refining()"
                 aria-label="Refinement feedback"
               ></textarea>
-              <label class="model-row">
-                <span class="model-label">Model</span>
-                <select
-                  class="model-select"
-                  [ngModel]="selectedRefineModel()"
-                  (ngModelChange)="onSelectRefineModel($event)"
-                  [disabled]="refining()"
-                  aria-label="Model for refinement"
-                >
-                  @for (model of availableModels(); track model.id) {
-                    <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
-                  }
-                </select>
-              </label>
+              <div class="options-row">
+                <label class="model-row">
+                  <span class="model-label">Model</span>
+                  <select
+                    class="model-select"
+                    [ngModel]="selectedRefineModel()"
+                    (ngModelChange)="onSelectRefineModel($event)"
+                    [disabled]="refining()"
+                    aria-label="Model for refinement"
+                  >
+                    @for (model of availableModels(); track model.id) {
+                      <option [value]="model.id">{{ model.displayName }} — {{ model.tier }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="search-toggle">
+                  <input
+                    type="checkbox"
+                    [checked]="webSearchActiveRefine()"
+                    (change)="onToggleRefineWebSearch($event)"
+                    [disabled]="refining()"
+                    aria-label="Use web search for refinement"
+                  />
+                  <span>Web search</span>
+                </label>
+              </div>
               <div class="refine-actions">
                 @if (refining()) {
                   <button type="button" class="btn btn-stop" (click)="onStopRefine()">
@@ -345,6 +358,11 @@ import { MarkdownRendererComponent } from './markdown-renderer.component';
         display: flex;
         justify-content: flex-end;
       }
+      .options-row {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
       .model-row {
         display: flex;
         align-items: center;
@@ -371,6 +389,17 @@ import { MarkdownRendererComponent } from './markdown-renderer.component';
       .model-select:disabled {
         opacity: 0.55;
         cursor: not-allowed;
+      }
+      .search-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-xs);
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+      }
+      .search-toggle input[type='checkbox'] {
+        accent-color: var(--color-purple);
       }
       .refine-warn {
         color: var(--color-amber);
@@ -473,6 +502,7 @@ export class ReviewViewerComponent {
   protected readonly refining = signal(false);
   protected readonly refineError = signal<string | null>(null);
   protected readonly refineModelOverride = signal<string | null>(null);
+  protected readonly refineWebSearchOverride = signal<boolean | null>(null);
   protected editDraft = '';
   protected refineDraft = '';
   private refineController: AbortController | null = null;
@@ -481,6 +511,9 @@ export class ReviewViewerComponent {
   readonly availableModels = this.modelsService.models;
   readonly selectedRefineModel = computed(
     () => this.refineModelOverride() ?? this.modelsService.resolveModel(this.settings.defaultModel()),
+  );
+  readonly webSearchActiveRefine = computed(
+    () => this.refineWebSearchOverride() ?? this.settings.webSearchEnabled(),
   );
 
   constructor() {
@@ -501,6 +534,11 @@ export class ReviewViewerComponent {
 
   onSelectRefineModel(value: string): void {
     this.refineModelOverride.set(value);
+  }
+
+  onToggleRefineWebSearch(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.refineWebSearchOverride.set(checked);
   }
 
   onToggleEdit(question: Question): void {
@@ -548,6 +586,10 @@ export class ReviewViewerComponent {
         ? { workspaceId: this.settings.awsWorkspaceId(), region: this.settings.awsRegion() }
         : undefined;
       const activePack = this.packs.activePack();
+      const extras = {
+        enableWebSearch: this.webSearchActiveRefine(),
+        mcpServers: resolveEnabledMcps(activePack.enabledMcps),
+      };
 
       for await (const chunk of this.anthropic.streamRefineReview(
         baseReview,
@@ -558,6 +600,7 @@ export class ReviewViewerComponent {
         aws,
         this.selectedRefineModel(),
         controller.signal,
+        extras,
       )) {
         accumulated += chunk;
         if (!started) {
@@ -572,6 +615,7 @@ export class ReviewViewerComponent {
       this.questionsService.setReview(question.id, stripInferredMetadata(accumulated));
       this.refineDraft = '';
       this.refineModelOverride.set(null);
+      this.refineWebSearchOverride.set(null);
     } catch (err) {
       const aborted = (err as Error)?.name === 'AbortError' || controller.signal.aborted;
       if (started) {
