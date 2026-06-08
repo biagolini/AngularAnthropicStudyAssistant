@@ -72,6 +72,29 @@ export class QuestionsService {
     this.persist(next);
   }
 
+  setReview(id: string, review: string): void {
+    const next = this.state().map((q) =>
+      q.id === id ? { ...q, review } : q,
+    );
+    this.persist(next);
+  }
+
+  appendToReview(id: string, chunk: string): void {
+    if (!chunk) return;
+    const next = this.state().map((q) =>
+      q.id === id ? { ...q, review: q.review + chunk } : q,
+    );
+    this.persist(next);
+  }
+
+  updatePartial(
+    id: string,
+    partial: Partial<Pick<Question, 'title' | 'domain' | 'review'>>,
+  ): void {
+    const next = this.state().map((q) => (q.id === id ? { ...q, ...partial } : q));
+    this.persist(next);
+  }
+
   remove(id: string): void {
     this.persist(this.state().filter((q) => q.id !== id));
     this.deselect(id);

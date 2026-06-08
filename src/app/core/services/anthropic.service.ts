@@ -160,6 +160,171 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     if (!text) throw new Error('Empty response from Anthropic API.');
     return text;
   }
+
+  async *streamReview(
+    question: string,
+    apiKey: string,
+    certName: string,
+    domains: string[],
+    aws: AwsRoutingOptions | undefined,
+    model: string | undefined,
+    signal: AbortSignal,
+  ): AsyncGenerator<string, void, void> {
+    const trimmedQuestion = question.trim();
+    if (!trimmedQuestion) throw new Error('Question cannot be empty.');
+    const system = buildSystemPrompt(certName, domains);
+    yield* this.streamMessages(
+      apiKey,
+      aws,
+      system,
+      [{ role: 'user', content: trimmedQuestion }],
+      model,
+      signal,
+    );
+  }
+
+  async *streamRefineReview(
+    currentReview: string,
+    feedback: string,
+    apiKey: string,
+    certName: string,
+    domains: string[],
+    aws: AwsRoutingOptions | undefined,
+    model: string | undefined,
+    signal: AbortSignal,
+  ): AsyncGenerator<string, void, void> {
+    const trimmedFeedback = feedback.trim();
+    if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
+    if (!currentReview.trim()) throw new Error('No review to refine.');
+
+    const system = buildSystemPrompt(certName, domains);
+    const userMessage = `You previously generated the exam review below. Refine it based on the user's feedback while keeping the SAME OUTPUT FORMAT specified in your instructions.
+
+=== CURRENT REVIEW ===
+${currentReview}
+
+=== USER FEEDBACK ===
+${trimmedFeedback}
+
+Return the FULL refined review. Apply only the changes needed to address the feedback; preserve everything else.`;
+
+    yield* this.streamMessages(
+      apiKey,
+      aws,
+      system,
+      [{ role: 'user', content: userMessage }],
+      model,
+      signal,
+    );
+  }
+
+  private async *streamMessages(
+    apiKey: string,
+    aws: AwsRoutingOptions | undefined,
+    system: string,
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    model: string | undefined,
+    signal: AbortSignal,
+  ): AsyncGenerator<string, void, void> {
+    if (!apiKey) throw new Error('Missing API key.');
+    const useAws = isAwsApiKey(apiKey);
+    if (useAws && (!aws?.workspaceId || !aws.region)) {
+      throw new Error(
+        'Claude Platform on AWS keys require a workspace ID and region. Open Settings to fill them in.',
+      );
+    }
+
+    const url = useAws
+      ? `https://aws-external-anthropic.${aws!.region}.api.aws/v1/messages`
+      : ANTHROPIC_URL;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'Accept': 'text/event-stream',
+    };
+    if (useAws) {
+      headers['anthropic-workspace-id'] = aws!.workspaceId;
+    } else {
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: model || DEFAULT_MODEL,
+        max_tokens: MAX_TOKENS,
+        system,
+        messages,
+        stream: true,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as AnthropicResponse | null;
+      const message = data?.error?.message ?? `Request failed with status ${response.status}.`;
+      throw new Error(message);
+    }
+    if (!response.body) throw new Error('Streaming is not supported in this environment.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let separatorIndex;
+        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+          const block = buffer.slice(0, separatorIndex);
+          buffer = buffer.slice(separatorIndex + 2);
+          const text = extractTextDelta(block);
+          if (text) yield text;
+        }
+      }
+      if (buffer.trim()) {
+        const text = extractTextDelta(buffer);
+        if (text) yield text;
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+function extractTextDelta(block: string): string | null {
+  const lines = block.split('\n');
+  let dataPayload: string | null = null;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith(':')) continue;
+    if (line.startsWith('data:')) {
+      dataPayload = line.slice(5).trimStart();
+    }
+  }
+  if (!dataPayload || dataPayload === '[DONE]') return null;
+  try {
+    const evt = JSON.parse(dataPayload) as {
+      type?: string;
+      delta?: { type?: string; text?: string };
+    };
+    if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+      return evt.delta.text ?? null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function buildSystemPrompt(certName: string, domains: string[]): string {

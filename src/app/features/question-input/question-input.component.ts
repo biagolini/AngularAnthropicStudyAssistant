@@ -12,11 +12,12 @@ import {
   parseTitleFromResponse,
   stripInferredMetadata,
 } from '../../core/utils/domain-inference.util';
+import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.component';
 
 @Component({
   selector: 'app-question-input',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, AiDisclaimerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="input-card">
@@ -35,7 +36,7 @@ import {
         <span class="visually-hidden">Question text</span>
         <textarea
           [(ngModel)]="draft"
-          [disabled]="!hasApiKey() || loading()"
+          [disabled]="!hasApiKey() || streaming()"
           rows="8"
           placeholder="Paste the question stem and all alternatives (A, B, C, D) here..."
           class="textarea"
@@ -48,7 +49,7 @@ import {
           class="model-select"
           [ngModel]="selectedModel()"
           (ngModelChange)="onSelectModel($event)"
-          [disabled]="loading()"
+          [disabled]="streaming()"
           aria-label="Model for this generation"
         >
           @for (model of availableModels(); track model.id) {
@@ -57,23 +58,29 @@ import {
         </select>
       </label>
 
-      <button
-        type="button"
-        class="generate-btn"
-        (click)="onGenerate()"
-        [disabled]="!canGenerate()"
-      >
-        @if (loading()) {
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Generating...</span>
-        } @else {
+      @if (streaming()) {
+        <button type="button" class="stop-btn" (click)="onStop()">
+          <span class="stop-icon" aria-hidden="true"></span>
+          <span>Stop</span>
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="generate-btn"
+          (click)="onGenerate()"
+          [disabled]="!canGenerate()"
+        >
           <span>Generate Review</span>
-        }
-      </button>
+        </button>
+      }
 
       @if (error()) {
         <p class="error" role="alert">{{ error() }}</p>
       }
+
+      <app-ai-disclaimer
+        message="Generated reviews are produced by AI and can contain mistakes or hallucinations. Always verify against the official certification material."
+      />
     </section>
   `,
   styles: [
@@ -191,18 +198,29 @@ import {
         opacity: 0.55;
         cursor: not-allowed;
       }
-      .spinner {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        border: 2px solid rgba(255, 255, 255, 0.4);
-        border-top-color: #ffffff;
-        animation: spin 0.8s linear infinite;
+      .stop-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-sm);
+        width: 100%;
+        min-height: 48px;
+        padding: 0 var(--space-lg);
+        border-radius: var(--radius-md);
+        background: var(--color-red);
+        color: #ffffff;
+        font-weight: 600;
+        font-size: var(--font-size-lg);
+        transition: filter var(--transition-fast);
       }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
+      .stop-btn:hover {
+        filter: brightness(1.1);
+      }
+      .stop-icon {
+        width: 14px;
+        height: 14px;
+        background: #ffffff;
+        border-radius: 3px;
       }
       .error {
         color: var(--color-red);
@@ -219,13 +237,14 @@ export class QuestionInputComponent {
   private readonly modelsService = inject(ModelsService);
   private readonly packs = inject(PacksService);
 
-  protected readonly loading = signal(false);
+  protected readonly streaming = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly modelOverride = signal<string | null>(null);
   protected draft = '';
+  private streamController: AbortController | null = null;
 
   readonly hasApiKey = computed(() => !!this.storage.apiKey());
-  readonly canGenerate = computed(() => this.hasApiKey() && !this.loading());
+  readonly canGenerate = computed(() => this.hasApiKey() && !this.streaming());
   readonly availableModels = this.modelsService.models;
   readonly selectedModel = computed(
     () => this.modelOverride() ?? this.modelsService.resolveModel(this.settings.defaultModel()),
@@ -249,46 +268,77 @@ export class QuestionInputComponent {
       return;
     }
 
-    this.loading.set(true);
+    const activePack = this.packs.activePack();
+    const domains = activePack.domains;
+    const certName = activePack.name;
+    const fallbackTitle = text.slice(0, 80).replace(/\s+/g, ' ').trim();
+
+    const controller = new AbortController();
+    this.streamController = controller;
+    this.streaming.set(true);
     this.error.set(null);
 
+    let question: Question | null = null;
+    let accumulated = '';
     try {
-      const activePack = this.packs.activePack();
-      const domains = activePack.domains;
-      const certName = activePack.name;
       const awsOptions = apiKey.startsWith('AEA')
         ? { workspaceId: this.settings.awsWorkspaceId(), region: this.settings.awsRegion() }
         : undefined;
-      const raw = await this.anthropic.generateReview(
+
+      for await (const chunk of this.anthropic.streamReview(
         text,
         apiKey,
         certName,
         domains,
         awsOptions,
         this.selectedModel(),
-      );
-      const domain = parseDomainFromResponse(raw, domains);
-      const fallbackTitle = text.slice(0, 80).replace(/\s+/g, ' ').trim();
-      const title = parseTitleFromResponse(raw, fallbackTitle);
-      const review = stripInferredMetadata(raw);
+        controller.signal,
+      )) {
+        accumulated += chunk;
+        if (!question) {
+          question = {
+            id: crypto.randomUUID(),
+            packId: activePack.id,
+            title: fallbackTitle,
+            domain: domains[0] ?? 'General',
+            review: chunk,
+            createdAt: Date.now(),
+          };
+          this.questionsService.add(question);
+          this.draft = '';
+          this.generated.emit(question);
+        } else {
+          this.questionsService.appendToReview(question.id, chunk);
+        }
+      }
 
-      const question: Question = {
-        id: crypto.randomUUID(),
-        packId: activePack.id,
-        title,
-        domain,
-        review,
-        createdAt: Date.now(),
-      };
-
-      this.questionsService.add(question);
-      this.draft = '';
+      if (question) {
+        const domain = parseDomainFromResponse(accumulated, domains);
+        const title = parseTitleFromResponse(accumulated, fallbackTitle);
+        const review = stripInferredMetadata(accumulated);
+        this.questionsService.updatePartial(question.id, { title, domain, review });
+      }
       this.modelOverride.set(null);
-      this.generated.emit(question);
     } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Failed to generate review.');
+      const aborted = (err as Error)?.name === 'AbortError' || controller.signal.aborted;
+      if (question) {
+        const domain = parseDomainFromResponse(accumulated, domains);
+        const title = parseTitleFromResponse(accumulated, fallbackTitle);
+        const review = stripInferredMetadata(accumulated);
+        this.questionsService.updatePartial(question.id, { title, domain, review });
+        if (!aborted) {
+          this.error.set(err instanceof Error ? err.message : 'Failed to generate review.');
+        }
+      } else if (!aborted) {
+        this.error.set(err instanceof Error ? err.message : 'Failed to generate review.');
+      }
     } finally {
-      this.loading.set(false);
+      this.streaming.set(false);
+      this.streamController = null;
     }
+  }
+
+  onStop(): void {
+    this.streamController?.abort();
   }
 }

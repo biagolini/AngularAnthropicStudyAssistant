@@ -5,18 +5,22 @@ import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
 import { Question } from '../../core/models/question.model';
 import { slugify } from '../../core/utils/file-splitter.util';
+import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.component';
 import { DomainBadgeComponent } from '../../shared/components/domain-badge.component';
 
 @Component({
   selector: 'app-export',
   standalone: true,
-  imports: [FormsModule, DomainBadgeComponent],
+  imports: [FormsModule, AiDisclaimerComponent, DomainBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="export">
       <header class="card-header">
         <h2>Export</h2>
         <p class="subtitle">Download selected questions as Markdown files ready for NotebookLM.</p>
+        <app-ai-disclaimer
+          message="Exported files contain AI-generated reviews. Verify content before sharing or using them as study material for others."
+        />
       </header>
 
       <div class="card">
