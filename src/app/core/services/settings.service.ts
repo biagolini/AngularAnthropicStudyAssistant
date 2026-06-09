@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { StudyMethod } from '../models/method.model';
 import { AppSettings, ThemeMode } from '../models/settings.model';
 import { StorageService } from './storage.service';
 
@@ -15,6 +16,7 @@ export class SettingsService {
   readonly defaultModel = computed(() => this.state().defaultModel);
   readonly activePackId = computed(() => this.state().activePackId);
   readonly webSearchEnabled = computed(() => this.state().webSearchEnabled);
+  readonly activeMethod = computed(() => this.state().activeMethod);
 
   setTheme(theme: ThemeMode): void {
     this.update((s) => ({ ...s, theme }));
@@ -40,6 +42,11 @@ export class SettingsService {
   setWebSearchEnabled(value: boolean): void {
     if (value === this.state().webSearchEnabled) return;
     this.update((s) => ({ ...s, webSearchEnabled: value }));
+  }
+
+  setActiveMethod(method: StudyMethod): void {
+    if (method === this.state().activeMethod) return;
+    this.update((s) => ({ ...s, activeMethod: method }));
   }
 
   private update(updater: (current: AppSettings) => AppSettings): void {

@@ -5,13 +5,16 @@ import {
   DEFAULT_PACK_NAME,
   Pack,
 } from '../models/pack.model';
+import { Script } from '../models/script.model';
 import { AppSettings, DEFAULT_SETTINGS } from '../models/settings.model';
+import { isStudyMethod } from '../models/method.model';
 
 const PREFIX = 'cert_study__';
 const KEY_API = `${PREFIX}api_key`;
 const KEY_QUESTIONS = `${PREFIX}questions`;
 const KEY_SETTINGS = `${PREFIX}settings`;
 const KEY_PACKS = `${PREFIX}packs`;
+const KEY_SCRIPTS = `${PREFIX}scripts`;
 
 @Injectable({ providedIn: 'root' })
 export class StorageService {
@@ -86,6 +89,30 @@ export class StorageService {
     this.write(KEY_PACKS, JSON.stringify(packs));
   }
 
+  getScripts(): Script[] {
+    const raw = this.read(KEY_SCRIPTS);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as Script[];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((s) => s && typeof s.id === 'string')
+        .map((s) => ({
+          id: s.id,
+          title: typeof s.title === 'string' ? s.title : '',
+          content: typeof s.content === 'string' ? s.content : '',
+          sources: Array.isArray(s.sources) ? s.sources.filter((t): t is string => typeof t === 'string') : [],
+          createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  saveScripts(scripts: Script[]): void {
+    this.write(KEY_SCRIPTS, JSON.stringify(scripts));
+  }
+
   getSettings(): AppSettings {
     const raw = this.read(KEY_SETTINGS);
     if (!raw) return { ...DEFAULT_SETTINGS };
@@ -98,6 +125,10 @@ export class StorageService {
         defaultModel: typeof parsed.defaultModel === 'string' && parsed.defaultModel ? parsed.defaultModel : DEFAULT_SETTINGS.defaultModel,
         activePackId: typeof parsed.activePackId === 'string' ? parsed.activePackId : DEFAULT_SETTINGS.activePackId,
         webSearchEnabled: typeof parsed.webSearchEnabled === 'boolean' ? parsed.webSearchEnabled : DEFAULT_SETTINGS.webSearchEnabled,
+        activeMethod:
+          typeof parsed.activeMethod === 'string' && isStudyMethod(parsed.activeMethod)
+            ? parsed.activeMethod
+            : DEFAULT_SETTINGS.activeMethod,
       };
     } catch {
       return { ...DEFAULT_SETTINGS };

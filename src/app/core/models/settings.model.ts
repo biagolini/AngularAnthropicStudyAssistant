@@ -1,5 +1,7 @@
 export type ThemeMode = 'light' | 'dark';
 
+import { StudyMethod } from './method.model';
+
 export interface AppSettings {
   theme: ThemeMode;
   awsWorkspaceId: string;
@@ -7,6 +9,7 @@ export interface AppSettings {
   defaultModel: string;
   activePackId: string;
   webSearchEnabled: boolean;
+  activeMethod: StudyMethod;
 }
 
 export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
@@ -18,6 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultModel: DEFAULT_MODEL,
   activePackId: '',
   webSearchEnabled: false,
+  activeMethod: 'question',
 };
 
 export const DEFAULT_DOMAIN = 'General';
