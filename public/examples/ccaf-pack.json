@@ -1,0 +1,11 @@
+{
+  "name": "Claude Certified Architect — Foundations (CCAF)",
+  "version": "",
+  "domains": [
+    "Agentic Architecture & Orchestration",
+    "Tool Design & MCP Integration",
+    "Claude Code Configuration & Workflows",
+    "Prompt Engineering & Structured Output",
+    "Context Management & Reliability"
+  ]
+}

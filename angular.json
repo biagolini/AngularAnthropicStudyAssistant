@@ -27,7 +27,6 @@
               "base": "docs",
               "browser": ""
             },
-            "baseHref": "/AngularAnthropicStudyAssistant/",
             "assets": [
               {
                 "glob": "**/*",
@@ -40,6 +39,7 @@
           },
           "configurations": {
             "production": {
+              "baseHref": "/AngularAnthropicStudyAssistant/",
               "budgets": [
                 {
                   "type": "initial",

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MCP_CATALOG } from '../../core/models/mcp.model';
 import {
@@ -110,10 +110,36 @@ import { QuestionsService } from '../../core/services/questions.service';
           }
 
           <div class="field">
-            <span class="field-label">Knowledge Domains</span>
+            <div class="field-label-row">
+              <span class="field-label">Knowledge Domains</span>
+              <button
+                type="button"
+                class="btn-import-json"
+                (click)="triggerJsonImport()"
+                aria-label="Import pack from JSON file"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+                </svg>
+                Import JSON
+              </button>
+              <input
+                #jsonFileInput
+                type="file"
+                accept=".json,application/json"
+                class="file-input-hidden"
+                aria-hidden="true"
+                (change)="onJsonFileSelected($event)"
+              />
+            </div>
             <span class="field-hint">
               The AI classifies each question into one of these. Leave empty to label every question as General.
             </span>
+            @if (jsonImportMessage()) {
+              <p class="import-msg" [class.import-ok]="jsonImportOk()" [class.import-err]="!jsonImportOk()">
+                {{ jsonImportMessage() }}
+              </p>
+            }
             <div class="domain-input">
               <input
                 class="text-input"
@@ -307,6 +333,46 @@ import { QuestionsService } from '../../core/services/questions.service';
         border-color: var(--text-primary);
         transform: scale(1.05);
         box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text-primary);
+      }
+      .field-label-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+      }
+      .btn-import-json {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px var(--space-sm);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--bg-border);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        font-size: var(--font-size-sm);
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color var(--transition-fast), color var(--transition-fast);
+        white-space: nowrap;
+      }
+      .btn-import-json:hover {
+        border-color: var(--color-purple);
+        color: var(--color-purple);
+      }
+      .file-input-hidden {
+        display: none;
+      }
+      .import-msg {
+        font-size: var(--font-size-sm);
+        padding: var(--space-xs) var(--space-sm);
+        border-radius: var(--radius-md);
+      }
+      .import-ok {
+        color: var(--color-green);
+        background: rgba(0, 184, 148, 0.08);
+      }
+      .import-err {
+        color: var(--color-red);
+        background: rgba(214, 48, 49, 0.08);
       }
       .domain-input {
         display: flex;
@@ -506,6 +572,10 @@ export class PackEditorComponent {
   protected readonly mcpsDraft = signal<string[]>([]);
   protected readonly domainError = signal<string | null>(null);
   protected readonly confirmingDelete = signal(false);
+  protected readonly jsonImportMessage = signal<string | null>(null);
+  protected readonly jsonImportOk = signal(false);
+
+  @ViewChild('jsonFileInput') private jsonFileInput!: ElementRef<HTMLInputElement>;
 
   readonly isEditMode = computed(() => !!this.pack());
   readonly domains = this.domainsDraft.asReadonly();
@@ -529,6 +599,52 @@ export class PackEditorComponent {
     };
     // Run sync once on construction.
     queueMicrotask(sync);
+  }
+
+  triggerJsonImport(): void {
+    this.jsonFileInput.nativeElement.value = '';
+    this.jsonFileInput.nativeElement.click();
+  }
+
+  onJsonFileSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const raw = typeof reader.result === 'string' ? reader.result : '';
+        const parsed = JSON.parse(raw) as Partial<{ name: string; version: string; domains: unknown[] }>;
+        const applied: string[] = [];
+
+        if (typeof parsed.name === 'string' && parsed.name.trim()) {
+          this.nameDraft = parsed.name.trim();
+          applied.push('name');
+        }
+        if (typeof parsed.version === 'string') {
+          this.versionDraft = parsed.version.trim();
+          applied.push('version');
+        }
+        if (Array.isArray(parsed.domains)) {
+          const domains = parsed.domains
+            .filter((d): d is string => typeof d === 'string' && !!d.trim())
+            .slice(0, MAX_PACK_DOMAINS);
+          this.domainsDraft.set(domains);
+          applied.push(`${domains.length} domain${domains.length === 1 ? '' : 's'}`);
+        }
+
+        if (applied.length > 0) {
+          this.jsonImportOk.set(true);
+          this.jsonImportMessage.set(`Imported: ${applied.join(', ')}.`);
+        } else {
+          this.jsonImportOk.set(false);
+          this.jsonImportMessage.set('No recognized fields found in the file.');
+        }
+      } catch {
+        this.jsonImportOk.set(false);
+        this.jsonImportMessage.set('Could not parse file. Make sure it is valid JSON.');
+      }
+    };
+    reader.readAsText(file);
   }
 
   setColor(value: string): void {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AWS_REGIONS, isAwsApiKey } from '../../core/models/settings.model';
 import { AnthropicService } from '../../core/services/anthropic.service';
@@ -38,6 +38,39 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
       </header>
 
       <div class="drawer-body">
+        <section class="block">
+          <header class="section-header">
+            <h3>Quick import</h3>
+            <p class="helper">
+              Load API credentials from a <code>.env</code> file. Reads <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_AWS_WORKSPACE_ID</code>, and <code>ANTHROPIC_AWS_REGION</code>.
+            </p>
+          </header>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            (click)="triggerEnvImport()"
+            aria-label="Import .env file"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+            </svg>
+            <span>Import .env</span>
+          </button>
+          <input
+            #envFileInput
+            type="file"
+            accept=".env,text/plain"
+            class="file-input-hidden"
+            aria-hidden="true"
+            (change)="onEnvFileSelected($event)"
+          />
+          @if (envImportMessage()) {
+            <p class="status" [class.status-ok]="envImportOk()" [class.status-failed]="!envImportOk()">
+              {{ envImportMessage() }}
+            </p>
+          }
+        </section>
+
         <section class="block">
           <app-api-key />
         </section>
@@ -526,6 +559,9 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
         color: var(--color-red);
         font-size: var(--font-size-sm);
       }
+      .file-input-hidden {
+        display: none;
+      }
       .chips {
         display: flex;
         flex-wrap: wrap;
@@ -632,6 +668,68 @@ export class SettingsComponent {
   protected readonly testError = signal<string>('');
   protected readonly testEndpoint = signal<string>('');
   protected readonly awsInfoOpen = signal(false);
+
+  protected readonly envImportMessage = signal<string | null>(null);
+  protected readonly envImportOk = signal(false);
+
+  @ViewChild('envFileInput') private envFileInput!: ElementRef<HTMLInputElement>;
+
+  triggerEnvImport(): void {
+    this.envFileInput.nativeElement.value = '';
+    this.envFileInput.nativeElement.click();
+  }
+
+  onEnvFileSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+      const vars = this.parseEnv(text);
+      const applied: string[] = [];
+
+      const apiKey = vars['ANTHROPIC_API_KEY'];
+      if (apiKey) {
+        this.storage.setApiKey(apiKey);
+        applied.push('API key');
+      }
+      const workspaceId = vars['ANTHROPIC_AWS_WORKSPACE_ID'];
+      if (workspaceId) {
+        this.settings.setAwsWorkspaceId(workspaceId);
+        this.workspaceIdDraft.set(workspaceId);
+        applied.push('Workspace ID');
+      }
+      const region = vars['ANTHROPIC_AWS_REGION'];
+      if (region) {
+        this.settings.setAwsRegion(region);
+        applied.push('Region');
+      }
+
+      if (applied.length > 0) {
+        this.envImportOk.set(true);
+        this.envImportMessage.set(`Imported: ${applied.join(', ')}.`);
+      } else {
+        this.envImportOk.set(false);
+        this.envImportMessage.set('No recognized variables found in the file.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  private parseEnv(text: string): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq < 1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const raw = trimmed.slice(eq + 1).trim();
+      const value = raw.replace(/^(['"])(.*)\1$/, '$2');
+      if (key && value) result[key] = value;
+    }
+    return result;
+  }
 
   onClearRequested(): void {
     this.confirmingClear.set(true);

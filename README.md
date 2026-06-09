@@ -55,6 +55,80 @@ Settings persist across reloads. To wipe everything (including the API key), use
 
 ---
 
+## Importing settings with a .env file
+
+Instead of typing credentials manually every time you clear the browser cache, you can keep a local `.env` file and import it in one click.
+
+**Step 1 — create your `.env` file** (use `.env.example` as the template):
+
+```
+ANTHROPIC_API_KEY=sk-ant-api03-...
+ANTHROPIC_AWS_WORKSPACE_ID=wrkspc_...   # only for AWS keys
+ANTHROPIC_AWS_REGION=us-east-1          # only for AWS keys
+```
+
+**Step 2 — import it in the app:**
+
+1. Open Settings (gear icon in the header).
+2. Under **Quick import**, tap **Import .env**.
+3. Select your `.env` file. The app reads the three variables above and applies them immediately — API key, Workspace ID (if present), and Region (if present).
+
+The import never leaves your browser. The file is read locally by the JavaScript `FileReader` API and the values go straight into `localStorage`. Nothing is uploaded.
+
+---
+
+## Importing a pack from JSON
+
+A pack stores the exam name, an optional version label, and the list of knowledge domains. You can pre-configure a pack by importing a JSON file instead of typing everything by hand.
+
+**Format:**
+
+```json
+{
+  "name": "Exam name",
+  "version": "optional label",
+  "domains": [
+    "Domain one",
+    "Domain two"
+  ]
+}
+```
+
+**How to import:**
+
+1. Open the pack switcher (the colored badge in the header) and tap **New pack** — or tap **Edit** on an existing pack.
+2. Next to the **Knowledge Domains** label, tap **Import JSON**.
+3. Select your `.json` file. Name, version, and domains are filled in automatically.
+4. Adjust anything you want, then tap **Save**.
+
+### Example: Claude Certified Architect — Foundations (CCAF)
+
+A ready-to-use pack file for the CCAF certification is available in this repository:
+
+```
+public/examples/ccaf-pack.json
+```
+
+Contents:
+
+```json
+{
+  "name": "Claude Certified Architect — Foundations (CCAF)",
+  "version": "",
+  "domains": [
+    "Agentic Architecture & Orchestration",
+    "Tool Design & MCP Integration",
+    "Claude Code Configuration & Workflows",
+    "Prompt Engineering & Structured Output",
+    "Context Management & Reliability"
+  ]
+}
+```
+
+Download the file and import it via the pack editor to have the five official exam domains ready without typing them one by one. You can use this as a template to create your own pack files for other certifications.
+
+---
+
 ## Daily use
 
 With Settings filled in, the day-to-day loop is three tabs:
