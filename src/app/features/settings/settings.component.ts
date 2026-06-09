@@ -45,25 +45,53 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
               Load API credentials from a <code>.env</code> file. Reads <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_AWS_WORKSPACE_ID</code>, and <code>ANTHROPIC_AWS_REGION</code>.
             </p>
           </header>
-          <button
-            type="button"
-            class="btn btn-secondary"
-            (click)="triggerEnvImport()"
-            aria-label="Import .env file"
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-              <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-            </svg>
-            <span>Import .env</span>
-          </button>
-          <input
-            #envFileInput
-            type="file"
-            accept=".env,text/plain"
-            class="file-input-hidden"
-            aria-hidden="true"
-            (change)="onEnvFileSelected($event)"
-          />
+          <div class="import-btn-row">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              (click)="triggerEnvImport()"
+              aria-label="Import .env file"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+              </svg>
+              <span>Import file</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              (click)="toggleEnvPaste()"
+              aria-label="Paste .env text"
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/>
+              </svg>
+              <span>Paste text</span>
+            </button>
+            <input
+              #envFileInput
+              type="file"
+              accept=".env,text/plain"
+              class="file-input-hidden"
+              aria-hidden="true"
+              (change)="onEnvFileSelected($event)"
+            />
+          </div>
+          @if (envPasteOpen()) {
+            <div class="paste-area">
+              <textarea
+                class="text-input paste-textarea"
+                [(ngModel)]="envPasteDraft"
+                placeholder="Paste your .env content here..."
+                aria-label="Paste .env content"
+                rows="5"
+              ></textarea>
+              <div class="paste-actions">
+                <button type="button" class="btn btn-primary" (click)="applyEnvPaste()">Apply</button>
+                <button type="button" class="btn btn-ghost" (click)="toggleEnvPaste()">Cancel</button>
+              </div>
+            </div>
+          }
           @if (envImportMessage()) {
             <p class="status" [class.status-ok]="envImportOk()" [class.status-failed]="!envImportOk()">
               {{ envImportMessage() }}
@@ -581,6 +609,28 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
       .file-input-hidden {
         display: none;
       }
+      .import-btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+      }
+      .paste-area {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+      }
+      .paste-textarea {
+        height: auto;
+        padding: var(--space-sm) var(--space-md);
+        resize: vertical;
+        font-family: var(--font-mono);
+        font-size: var(--font-size-sm);
+        line-height: 1.5;
+      }
+      .paste-actions {
+        display: flex;
+        gap: var(--space-sm);
+      }
       .chips {
         display: flex;
         flex-wrap: wrap;
@@ -692,6 +742,8 @@ export class SettingsComponent {
 
   protected readonly envImportMessage = signal<string | null>(null);
   protected readonly envImportOk = signal(false);
+  protected readonly envPasteOpen = signal(false);
+  protected envPasteDraft = '';
 
   @ViewChild('envFileInput') private envFileInput!: ElementRef<HTMLInputElement>;
 
@@ -700,46 +752,61 @@ export class SettingsComponent {
     this.envFileInput.nativeElement.click();
   }
 
+  toggleEnvPaste(): void {
+    this.envPasteOpen.update((v) => !v);
+    if (!this.envPasteOpen()) this.envPasteDraft = '';
+  }
+
+  applyEnvPaste(): void {
+    this.applyEnvText(this.envPasteDraft);
+    this.envPasteDraft = '';
+    this.envPasteOpen.set(false);
+  }
+
   onEnvFileSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       const text = typeof reader.result === 'string' ? reader.result : '';
-      const vars = this.parseEnv(text);
-      const applied: string[] = [];
-
-      const apiKey = vars['ANTHROPIC_API_KEY'];
-      if (apiKey) {
-        this.storage.setApiKey(apiKey);
-        applied.push('API key');
-      }
-      const workspaceId = vars['ANTHROPIC_AWS_WORKSPACE_ID'];
-      if (workspaceId) {
-        this.settings.setAwsWorkspaceId(workspaceId);
-        this.workspaceIdDraft.set(workspaceId);
-        applied.push('Workspace ID');
-      }
-      const region = vars['ANTHROPIC_AWS_REGION'];
-      if (region) {
-        this.settings.setAwsRegion(region);
-        applied.push('Region');
-      }
-      const lang = vars['ANTHROPIC_OUTPUT_LANGUAGE'];
-      if (lang) {
-        this.settings.setOutputLanguage(lang);
-        applied.push('Output language');
-      }
-
-      if (applied.length > 0) {
-        this.envImportOk.set(true);
-        this.envImportMessage.set(`Imported: ${applied.join(', ')}.`);
-      } else {
-        this.envImportOk.set(false);
-        this.envImportMessage.set('No recognized variables found in the file.');
-      }
+      this.applyEnvText(text);
     };
     reader.readAsText(file);
+  }
+
+  private applyEnvText(text: string): void {
+    const vars = this.parseEnv(text);
+    const applied: string[] = [];
+
+    const apiKey = vars['ANTHROPIC_API_KEY'];
+    if (apiKey) {
+      this.storage.setApiKey(apiKey);
+      applied.push('API key');
+    }
+    const workspaceId = vars['ANTHROPIC_AWS_WORKSPACE_ID'];
+    if (workspaceId) {
+      this.settings.setAwsWorkspaceId(workspaceId);
+      this.workspaceIdDraft.set(workspaceId);
+      applied.push('Workspace ID');
+    }
+    const region = vars['ANTHROPIC_AWS_REGION'];
+    if (region) {
+      this.settings.setAwsRegion(region);
+      applied.push('Region');
+    }
+    const lang = vars['ANTHROPIC_OUTPUT_LANGUAGE'];
+    if (lang) {
+      this.settings.setOutputLanguage(lang);
+      applied.push('Output language');
+    }
+
+    if (applied.length > 0) {
+      this.envImportOk.set(true);
+      this.envImportMessage.set(`Imported: ${applied.join(', ')}.`);
+    } else {
+      this.envImportOk.set(false);
+      this.envImportMessage.set('No recognized variables found in the file.');
+    }
   }
 
   private parseEnv(text: string): Record<string, string> {

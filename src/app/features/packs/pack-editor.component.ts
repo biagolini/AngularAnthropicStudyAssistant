@@ -166,7 +166,18 @@ import { QuestionsService } from '../../core/services/questions.service';
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                   <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
                 </svg>
-                Import JSON
+                Import file
+              </button>
+              <button
+                type="button"
+                class="btn-import-json"
+                (click)="toggleJsonPaste()"
+                aria-label="Paste JSON text"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/>
+                </svg>
+                Paste JSON
               </button>
               <input
                 #jsonFileInput
@@ -177,6 +188,21 @@ import { QuestionsService } from '../../core/services/questions.service';
                 (change)="onJsonFileSelected($event)"
               />
             </div>
+            @if (jsonPasteOpen()) {
+              <div class="json-paste-area">
+                <textarea
+                  class="text-input textarea json-paste-textarea"
+                  [(ngModel)]="jsonPasteDraft"
+                  placeholder="Paste your JSON here..."
+                  aria-label="Paste JSON content"
+                  rows="6"
+                ></textarea>
+                <div class="json-paste-actions">
+                  <button type="button" class="btn btn-primary btn-sm" (click)="applyJsonPaste()">Apply</button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="toggleJsonPaste()">Cancel</button>
+                </div>
+              </div>
+            }
             <span class="field-hint">
               The AI classifies each question into one of these. Leave empty to label every question as General.
             </span>
@@ -479,6 +505,20 @@ import { QuestionsService } from '../../core/services/questions.service';
       .file-input-hidden {
         display: none;
       }
+      .json-paste-area {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
+      .json-paste-textarea {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-sm);
+        line-height: 1.5;
+      }
+      .json-paste-actions {
+        display: flex;
+        gap: var(--space-xs);
+      }
       .import-msg {
         font-size: var(--font-size-sm);
         padding: var(--space-xs) var(--space-sm);
@@ -774,6 +814,8 @@ export class PackEditorComponent {
   protected readonly confirmingDelete = signal(false);
   protected readonly jsonImportMessage = signal<string | null>(null);
   protected readonly jsonImportOk = signal(false);
+  protected readonly jsonPasteOpen = signal(false);
+  protected jsonPasteDraft = '';
   protected readonly editingDomain = signal<string | null>(null);
   protected editNameDraft = '';
   protected editDescDraft = '';
@@ -814,68 +856,84 @@ export class PackEditorComponent {
     this.jsonFileInput.nativeElement.click();
   }
 
+  toggleJsonPaste(): void {
+    this.jsonPasteOpen.update((v) => !v);
+    if (!this.jsonPasteOpen()) this.jsonPasteDraft = '';
+  }
+
+  applyJsonPaste(): void {
+    this.applyJsonText(this.jsonPasteDraft);
+    this.jsonPasteDraft = '';
+    this.jsonPasteOpen.set(false);
+  }
+
   onJsonFileSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const raw = typeof reader.result === 'string' ? reader.result : '';
-        const parsed = JSON.parse(raw) as Partial<{
-          name: string;
-          version: string;
-          color: string;
-          domains: unknown[];
-        }>;
-        const applied: string[] = [];
-
-        if (typeof parsed.name === 'string' && parsed.name.trim()) {
-          this.nameDraft = parsed.name.trim();
-          applied.push('name');
-        }
-        if (typeof parsed.version === 'string') {
-          this.versionDraft = parsed.version.trim();
-          applied.push('version');
-        }
-        if (typeof parsed.color === 'string' && isAcceptablePackColor(parsed.color.trim())) {
-          this.colorDraft.set(parsed.color.trim());
-          applied.push('color');
-        }
-        if (typeof (parsed as Partial<{description: string}>).description === 'string') {
-          this.descriptionDraft = ((parsed as Partial<{description: string}>).description ?? '').trim();
-          applied.push('description');
-        }
-        if (Array.isArray(parsed.domains)) {
-          const domains: PackDomain[] = parsed.domains
-            .map((d) => {
-              if (typeof d === 'string' && d.trim()) return { name: d.trim(), description: '' };
-              if (d && typeof d === 'object') {
-                const obj = d as Record<string, unknown>;
-                const name = typeof obj['name'] === 'string' ? obj['name'].trim() : '';
-                if (!name) return null;
-                return { name, description: typeof obj['description'] === 'string' ? obj['description'].trim() : '' };
-              }
-              return null;
-            })
-            .filter((d): d is PackDomain => d !== null)
-            .slice(0, MAX_PACK_DOMAINS);
-          this.domainsDraft.set(domains);
-          applied.push(`${domains.length} domain${domains.length === 1 ? '' : 's'}`);
-        }
-
-        if (applied.length > 0) {
-          this.jsonImportOk.set(true);
-          this.jsonImportMessage.set(`Imported: ${applied.join(', ')}.`);
-        } else {
-          this.jsonImportOk.set(false);
-          this.jsonImportMessage.set('No recognized fields found in the file.');
-        }
-      } catch {
-        this.jsonImportOk.set(false);
-        this.jsonImportMessage.set('Could not parse file. Make sure it is valid JSON.');
-      }
+      const raw = typeof reader.result === 'string' ? reader.result : '';
+      this.applyJsonText(raw);
     };
     reader.readAsText(file);
+  }
+
+  private applyJsonText(raw: string): void {
+    try {
+      const parsed = JSON.parse(raw) as Partial<{
+        name: string;
+        version: string;
+        color: string;
+        description: string;
+        domains: unknown[];
+      }>;
+      const applied: string[] = [];
+
+      if (typeof parsed.name === 'string' && parsed.name.trim()) {
+        this.nameDraft = parsed.name.trim();
+        applied.push('name');
+      }
+      if (typeof parsed.version === 'string') {
+        this.versionDraft = parsed.version.trim();
+        applied.push('version');
+      }
+      if (typeof parsed.color === 'string' && isAcceptablePackColor(parsed.color.trim())) {
+        this.colorDraft.set(parsed.color.trim());
+        applied.push('color');
+      }
+      if (typeof parsed.description === 'string') {
+        this.descriptionDraft = parsed.description.trim();
+        applied.push('description');
+      }
+      if (Array.isArray(parsed.domains)) {
+        const domains: PackDomain[] = parsed.domains
+          .map((d) => {
+            if (typeof d === 'string' && d.trim()) return { name: d.trim(), description: '' };
+            if (d && typeof d === 'object') {
+              const obj = d as Record<string, unknown>;
+              const name = typeof obj['name'] === 'string' ? obj['name'].trim() : '';
+              if (!name) return null;
+              return { name, description: typeof obj['description'] === 'string' ? obj['description'].trim() : '' };
+            }
+            return null;
+          })
+          .filter((d): d is PackDomain => d !== null)
+          .slice(0, MAX_PACK_DOMAINS);
+        this.domainsDraft.set(domains);
+        applied.push(`${domains.length} domain${domains.length === 1 ? '' : 's'}`);
+      }
+
+      if (applied.length > 0) {
+        this.jsonImportOk.set(true);
+        this.jsonImportMessage.set(`Imported: ${applied.join(', ')}.`);
+      } else {
+        this.jsonImportOk.set(false);
+        this.jsonImportMessage.set('No recognized fields found.');
+      }
+    } catch {
+      this.jsonImportOk.set(false);
+      this.jsonImportMessage.set('Could not parse JSON. Check the format and try again.');
+    }
   }
 
   setColor(value: string): void {
