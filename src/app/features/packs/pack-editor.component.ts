@@ -6,6 +6,9 @@ import {
   MAX_PACK_DOMAINS,
   PACK_COLORS,
   Pack,
+  isAcceptablePackColor,
+  isValidHexColor,
+  isValidPackColor,
 } from '../../core/models/pack.model';
 import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
@@ -79,7 +82,36 @@ import { QuestionsService } from '../../core/services/questions.service';
                   (click)="setColor(color.value)"
                 ></button>
               }
+              <button
+                type="button"
+                class="color-swatch custom-swatch"
+                role="radio"
+                [attr.aria-checked]="isCustomColor()"
+                aria-label="Custom color"
+                [class.selected]="isCustomColor()"
+                [class.has-custom]="isCustomColor()"
+                [style.background]="isCustomColor() ? colorDraft() : null"
+                (click)="openColorPicker()"
+              >
+                @if (!isCustomColor()) {
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/>
+                  </svg>
+                }
+              </button>
+              <input
+                #colorPickerInput
+                type="color"
+                class="color-picker-hidden"
+                [value]="isCustomColor() ? colorDraft() : defaultCustomColor"
+                (input)="onCustomColorInput($event)"
+                aria-label="Pick a custom color"
+                tabindex="-1"
+              />
             </div>
+            @if (isCustomColor()) {
+              <span class="custom-hint">Custom color {{ colorDraft() }}</span>
+            }
           </div>
 
           @if (mcpCatalog.length > 0) {
@@ -334,6 +366,35 @@ import { QuestionsService } from '../../core/services/questions.service';
         transform: scale(1.05);
         box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text-primary);
       }
+      .custom-swatch {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-elevated);
+        border: 1px dashed var(--bg-border);
+        color: var(--text-muted);
+      }
+      .custom-swatch.has-custom {
+        border-style: solid;
+      }
+      .custom-swatch:hover {
+        border-color: var(--color-purple);
+        color: var(--color-purple);
+      }
+      .color-picker-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .custom-hint {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+      }
       .field-label-row {
         display: flex;
         align-items: center;
@@ -574,10 +635,13 @@ export class PackEditorComponent {
   protected readonly confirmingDelete = signal(false);
   protected readonly jsonImportMessage = signal<string | null>(null);
   protected readonly jsonImportOk = signal(false);
+  protected readonly defaultCustomColor = '#D97757';
 
   @ViewChild('jsonFileInput') private jsonFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('colorPickerInput') private colorPickerInput!: ElementRef<HTMLInputElement>;
 
   readonly isEditMode = computed(() => !!this.pack());
+  readonly isCustomColor = computed(() => !isValidPackColor(this.colorDraft()));
   readonly domains = this.domainsDraft.asReadonly();
   readonly questionsInPack = computed(() => {
     const p = this.pack();
@@ -613,7 +677,12 @@ export class PackEditorComponent {
     reader.onload = () => {
       try {
         const raw = typeof reader.result === 'string' ? reader.result : '';
-        const parsed = JSON.parse(raw) as Partial<{ name: string; version: string; domains: unknown[] }>;
+        const parsed = JSON.parse(raw) as Partial<{
+          name: string;
+          version: string;
+          color: string;
+          domains: unknown[];
+        }>;
         const applied: string[] = [];
 
         if (typeof parsed.name === 'string' && parsed.name.trim()) {
@@ -623,6 +692,10 @@ export class PackEditorComponent {
         if (typeof parsed.version === 'string') {
           this.versionDraft = parsed.version.trim();
           applied.push('version');
+        }
+        if (typeof parsed.color === 'string' && isAcceptablePackColor(parsed.color.trim())) {
+          this.colorDraft.set(parsed.color.trim());
+          applied.push('color');
         }
         if (Array.isArray(parsed.domains)) {
           const domains = parsed.domains
@@ -649,6 +722,17 @@ export class PackEditorComponent {
 
   setColor(value: string): void {
     this.colorDraft.set(value);
+  }
+
+  openColorPicker(): void {
+    this.colorPickerInput.nativeElement.click();
+  }
+
+  onCustomColorInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (isValidHexColor(value)) {
+      this.colorDraft.set(value);
+    }
   }
 
   onAddDomain(): void {

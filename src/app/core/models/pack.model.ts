@@ -21,7 +21,6 @@ export const PACK_COLORS: PackColorOption[] = [
   { id: 'sky', name: 'Sky', value: '#74b9ff' },
   { id: 'cyan', name: 'Cyan', value: '#00cec9' },
   { id: 'green', name: 'Green', value: '#00b894' },
-  { id: 'lime', name: 'Lime', value: '#55efc4' },
   { id: 'yellow', name: 'Yellow', value: '#fdcb6e' },
   { id: 'amber', name: 'Amber', value: '#e17055' },
   { id: 'red', name: 'Red', value: '#d63031' },
@@ -38,6 +37,14 @@ export const MAX_PACK_DOMAINS = 20;
 
 export function isValidPackColor(value: string): boolean {
   return PACK_COLORS.some((c) => c.value === value);
+}
+
+export function isValidHexColor(value: string): boolean {
+  return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(value);
+}
+
+export function isAcceptablePackColor(value: string): boolean {
+  return isValidPackColor(value) || isValidHexColor(value);
 }
 
 export function packDisplayLabel(pack: Pack): string {

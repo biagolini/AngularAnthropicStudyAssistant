@@ -4,7 +4,7 @@ import {
   DEFAULT_PACK_NAME,
   MAX_PACK_DOMAINS,
   Pack,
-  isValidPackColor,
+  isAcceptablePackColor,
 } from '../models/pack.model';
 import { SettingsService } from './settings.service';
 import { StorageService } from './storage.service';
@@ -54,7 +54,7 @@ export class PacksService {
       name: draft.name.trim() || DEFAULT_PACK_NAME,
       version: draft.version.trim(),
       domains: this.normalizeDomains(draft.domains),
-      color: isValidPackColor(draft.color) ? draft.color : DEFAULT_PACK_COLOR,
+      color: isAcceptablePackColor(draft.color) ? draft.color : DEFAULT_PACK_COLOR,
       enabledMcps: [...(draft.enabledMcps ?? [])],
       createdAt: now,
       updatedAt: now,
@@ -73,7 +73,7 @@ export class PacksService {
             name: draft.name.trim() || p.name,
             version: draft.version.trim(),
             domains: this.normalizeDomains(draft.domains),
-            color: isValidPackColor(draft.color) ? draft.color : p.color,
+            color: isAcceptablePackColor(draft.color) ? draft.color : p.color,
             enabledMcps: [...(draft.enabledMcps ?? [])],
             updatedAt: Date.now(),
           }

@@ -79,7 +79,7 @@ The import never leaves your browser. The file is read locally by the JavaScript
 
 ## Importing a pack from JSON
 
-A pack stores the exam name, an optional version label, and the list of knowledge domains. You can pre-configure a pack by importing a JSON file instead of typing everything by hand.
+A pack stores the exam name, an optional version label, a badge color, and the list of knowledge domains. You can pre-configure a pack by importing a JSON file instead of typing everything by hand.
 
 **Format:**
 
@@ -87,12 +87,15 @@ A pack stores the exam name, an optional version label, and the list of knowledg
 {
   "name": "Exam name",
   "version": "optional label",
+  "color": "#D97757",
   "domains": [
     "Domain one",
     "Domain two"
   ]
 }
 ```
+
+All fields are optional. `color` accepts either one of the twelve preset swatch values or any custom hex code (`#RGB` or `#RRGGBB`); anything unrecognized falls back to the default purple. Inside the editor you can also pick a custom color by tapping the dashed `+` swatch at the end of the color grid, which opens your browser's native color picker.
 
 **How to import:**
 
@@ -115,6 +118,7 @@ Contents:
 {
   "name": "Claude Certified Architect — Foundations (CCAF)",
   "version": "",
+  "color": "#D97757",
   "domains": [
     "Agentic Architecture & Orchestration",
     "Tool Design & MCP Integration",
@@ -125,7 +129,7 @@ Contents:
 }
 ```
 
-Download the file and import it via the pack editor to have the five official exam domains ready without typing them one by one. You can use this as a template to create your own pack files for other certifications.
+The `color` value `#D97757` is the Claude Code brand coral. Download the file and import it via the pack editor to have the five official exam domains and the brand color ready without typing them one by one. You can use this as a template to create your own pack files for other certifications.
 
 ---
 
