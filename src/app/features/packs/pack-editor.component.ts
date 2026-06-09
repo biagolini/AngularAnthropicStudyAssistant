@@ -222,21 +222,56 @@ import { QuestionsService } from '../../core/services/questions.service';
               <ul class="domain-list">
                 @for (domain of domains(); track domain.name) {
                   <li class="domain-item">
-                    <div class="domain-item-header">
-                      <span class="domain-item-name">{{ domain.name }}</span>
-                      <button
-                        type="button"
-                        class="chip-remove"
-                        (click)="removeDomain(domain.name)"
-                        [attr.aria-label]="'Remove ' + domain.name"
-                      >
-                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 5l14 14M19 5L5 19"/>
-                        </svg>
-                      </button>
-                    </div>
-                    @if (domain.description) {
-                      <p class="domain-item-desc">{{ domain.description }}</p>
+                    @if (editingDomain() === domain.name) {
+                      <div class="domain-edit-form">
+                        <input
+                          class="text-input"
+                          type="text"
+                          [(ngModel)]="editNameDraft"
+                          aria-label="Edit domain name"
+                          (keyup.enter)="saveEditDomain(domain.name)"
+                          (keyup.escape)="cancelEditDomain()"
+                        />
+                        <textarea
+                          class="text-input textarea domain-desc-input"
+                          [(ngModel)]="editDescDraft"
+                          aria-label="Edit domain description"
+                          rows="3"
+                        ></textarea>
+                        <div class="domain-edit-actions">
+                          <button type="button" class="btn btn-primary btn-sm" (click)="saveEditDomain(domain.name)">Save</button>
+                          <button type="button" class="btn btn-ghost btn-sm" (click)="cancelEditDomain()">Cancel</button>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="domain-item-header">
+                        <span class="domain-item-name">{{ domain.name }}</span>
+                        <div class="domain-item-actions">
+                          <button
+                            type="button"
+                            class="domain-action-btn"
+                            (click)="startEditDomain(domain.name, domain.description)"
+                            [attr.aria-label]="'Edit ' + domain.name"
+                          >
+                            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+                              <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="chip-remove"
+                            (click)="removeDomain(domain.name)"
+                            [attr.aria-label]="'Remove ' + domain.name"
+                          >
+                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                              <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 5l14 14M19 5L5 19"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      @if (domain.description) {
+                        <p class="domain-item-desc">{{ domain.description }}</p>
+                      }
                     }
                   </li>
                 }
@@ -501,6 +536,27 @@ import { QuestionsService } from '../../core/services/questions.service';
         font-size: var(--font-size-sm);
         font-weight: 600;
         color: var(--text-primary);
+        flex: 1;
+        min-width: 0;
+      }
+      .domain-item-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      .domain-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-sm);
+        color: var(--text-faint);
+      }
+      .domain-action-btn:hover {
+        color: var(--color-blue);
+        background: var(--bg-subtle);
       }
       .domain-item-desc {
         font-size: var(--font-size-sm);
@@ -508,6 +564,20 @@ import { QuestionsService } from '../../core/services/questions.service';
         line-height: 1.4;
         margin-top: 2px;
         white-space: pre-wrap;
+      }
+      .domain-edit-form {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
+      .domain-edit-actions {
+        display: flex;
+        gap: var(--space-xs);
+      }
+      .btn-sm {
+        min-height: 32px;
+        padding: 0 var(--space-sm);
+        font-size: var(--font-size-sm);
       }
       .mcp-list {
         display: flex;
@@ -704,6 +774,9 @@ export class PackEditorComponent {
   protected readonly confirmingDelete = signal(false);
   protected readonly jsonImportMessage = signal<string | null>(null);
   protected readonly jsonImportOk = signal(false);
+  protected readonly editingDomain = signal<string | null>(null);
+  protected editNameDraft = '';
+  protected editDescDraft = '';
   protected readonly defaultCustomColor = '#D97757';
 
   @ViewChild('jsonFileInput') private jsonFileInput!: ElementRef<HTMLInputElement>;
@@ -843,6 +916,35 @@ export class PackEditorComponent {
 
   removeDomain(name: string): void {
     this.domainsDraft.set(this.domainsDraft().filter((d) => d.name !== name));
+  }
+
+  startEditDomain(name: string, description: string): void {
+    this.editingDomain.set(name);
+    this.editNameDraft = name;
+    this.editDescDraft = description;
+  }
+
+  cancelEditDomain(): void {
+    this.editingDomain.set(null);
+    this.editNameDraft = '';
+    this.editDescDraft = '';
+  }
+
+  saveEditDomain(originalName: string): void {
+    const newName = this.editNameDraft.trim();
+    if (!newName) return;
+    const current = this.domainsDraft();
+    const conflict = current.some(
+      (d) => d.name !== originalName && d.name.toLowerCase() === newName.toLowerCase(),
+    );
+    if (conflict) return;
+    this.domainsDraft.set(
+      current.map((d) => d.name === originalName
+        ? { name: newName, description: this.editDescDraft.trim() }
+        : d,
+      ),
+    );
+    this.cancelEditDomain();
   }
 
   isMcpEnabled(id: string): boolean {
