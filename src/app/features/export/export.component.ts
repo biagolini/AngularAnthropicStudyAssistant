@@ -282,31 +282,31 @@ export class ExportComponent {
   downloadAll(): void {
     const questions = this.questionsService.questions();
     if (questions.length === 0) return;
-    const certName = this.packs.activePack().name;
-    const content = this.exportService.buildMarkdownContent(questions, 1, 1, certName);
-    const filename = this.exportService.buildFilename(certName, 'all');
+    const pack = this.packs.activePack();
+    const content = this.exportService.buildMarkdownContent(questions, 1, 1, pack);
+    const filename = this.exportService.buildFilename(pack.name, 'all');
     this.exportService.downloadFile(content, filename);
   }
 
   downloadDomain(domain: string): void {
     const questions = this.questionsService.selectedQuestions().filter((q) => q.domain === domain);
     if (questions.length === 0) return;
-    const certName = this.packs.activePack().name;
-    const content = this.exportService.buildMarkdownContent(questions, 1, 1, certName);
+    const pack = this.packs.activePack();
+    const content = this.exportService.buildMarkdownContent(questions, 1, 1, pack);
     const suffix = slugify(domain) || 'domain';
-    const filename = this.exportService.buildFilename(certName, suffix);
+    const filename = this.exportService.buildFilename(pack.name, suffix);
     this.exportService.downloadFile(content, filename);
   }
 
   private emitBatches(questions: Question[], maxPerFile: number): void {
     const batches = this.exportService.buildBatches(questions, Math.max(1, maxPerFile));
-    const certName = this.packs.activePack().name;
+    const pack = this.packs.activePack();
     const total = batches.length;
     batches.forEach((batch, index) => {
       const part = index + 1;
-      const content = this.exportService.buildMarkdownContent(batch, part, total, certName);
+      const content = this.exportService.buildMarkdownContent(batch, part, total, pack);
       const suffix = total > 1 ? `part-${part}-of-${total}` : 'selected';
-      const filename = this.exportService.buildFilename(certName, suffix);
+      const filename = this.exportService.buildFilename(pack.name, suffix);
       this.exportService.downloadFile(content, filename);
     });
   }

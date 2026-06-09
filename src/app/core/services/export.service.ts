@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { Pack, PackDomain } from '../models/pack.model';
 import { Question } from '../models/question.model';
 import { buildBatches, slugify, todayIsoDate } from '../utils/file-splitter.util';
 
@@ -24,13 +25,32 @@ export class ExportService {
     batch: Question[],
     partNum: number,
     totalParts: number,
-    certName: string,
+    pack: Pack,
   ): string {
-    const header = this.buildHeader(certName, partNum, totalParts, batch.length);
-    const body = batch
-      .map((question, index) => this.formatQuestion(question, index + 1))
-      .join('\n\n---\n\n');
-    return `${header}\n\n${body}\n`;
+    const title = pack.name ? `${pack.name} Study Notes` : 'IT Certification Study Notes';
+    const partLine = totalParts > 1 ? ` — Part ${partNum} of ${totalParts}` : '';
+    let md = `# ${title}${partLine}`;
+
+    if (pack.description) {
+      md += `\n\n${pack.description}`;
+    }
+
+    const domainMap = this.groupByDomain(batch);
+    const domainOrder = this.domainOrder(pack.domains, domainMap);
+
+    for (const domainName of domainOrder) {
+      const questions = domainMap.get(domainName) ?? [];
+      const packDomain = pack.domains.find((d) => d.name === domainName);
+      md += `\n\n---\n\n## ${domainName}`;
+      if (packDomain?.description) {
+        md += `\n\n${packDomain.description}`;
+      }
+      questions.forEach((q, i) => {
+        md += `\n\n### Question ${i + 1}\n\n${q.review.trim()}`;
+      });
+    }
+
+    return `${md}\n`;
   }
 
   buildFilename(
@@ -43,18 +63,21 @@ export class ExportService {
     return `${base}-${suffix}.md`;
   }
 
-  private buildHeader(
-    certName: string,
-    partNum: number,
-    totalParts: number,
-    count: number,
-  ): string {
-    const title = certName ? `${certName} Study Notes` : 'IT Certification Study Notes';
-    const partLine = totalParts > 1 ? ` — Part ${partNum} of ${totalParts}` : '';
-    return `# ${title}${partLine}\n\nGenerated on ${todayIsoDate()}. Contains ${count} reviewed question${count === 1 ? '' : 's'}.`;
+  private groupByDomain(questions: Question[]): Map<string, Question[]> {
+    const map = new Map<string, Question[]>();
+    for (const q of questions) {
+      const key = q.domain || 'General';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(q);
+    }
+    return map;
   }
 
-  private formatQuestion(question: Question, position: number): string {
-    return `## Question ${position} — ${question.domain}\n\n${question.review.trim()}`;
+  private domainOrder(packDomains: PackDomain[], present: Map<string, Question[]>): string[] {
+    const ordered = packDomains.map((d) => d.name).filter((name) => present.has(name));
+    for (const name of present.keys()) {
+      if (!ordered.includes(name)) ordered.push(name);
+    }
+    return ordered;
   }
 }

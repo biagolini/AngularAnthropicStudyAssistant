@@ -6,23 +6,23 @@
   "domains": [
     {
       "name": "Agentic Architecture & Orchestration",
-      "description": "Domain 1 (27%): Task 1.1 Design and implement agentic loops for autonomous task execution. Task 1.2 Orchestrate multi-agent systems with coordinator-subagent patterns. Task 1.3 Configure subagent invocation, context passing, and spawning. Task 1.4 Implement multi-step workflows with enforcement and handoff patterns. Task 1.5 Apply Agent SDK hooks for tool call interception and data normalization. Task 1.6 Design task decomposition strategies for complex workflows. Task 1.7 Manage session state, resumption, and forking."
+      "description": "Domain 1 (27%):\nTask 1.1 Design and implement agentic loops for autonomous task execution.\nTask 1.2 Orchestrate multi-agent systems with coordinator-subagent patterns.\nTask 1.3 Configure subagent invocation, context passing, and spawning.\nTask 1.4 Implement multi-step workflows with enforcement and handoff patterns.\nTask 1.5 Apply Agent SDK hooks for tool call interception and data normalization.\nTask 1.6 Design task decomposition strategies for complex workflows.\nTask 1.7 Manage session state, resumption, and forking."
     },
     {
       "name": "Tool Design & MCP Integration",
-      "description": "Domain 2 (18%): Task 2.1 Design effective tool interfaces with clear descriptions and boundaries. Task 2.2 Implement structured error responses for MCP tools. Task 2.3 Distribute tools appropriately across agents and configure tool choice. Task 2.4 Integrate MCP servers into Claude Code and agent workflows. Task 2.5 Select and apply built-in tools (Read, Write, Edit, Bash, Grep, Glob) effectively."
+      "description": "Domain 2 (18%):\nTask 2.1 Design effective tool interfaces with clear descriptions and boundaries.\nTask 2.2 Implement structured error responses for MCP tools.\nTask 2.3 Distribute tools appropriately across agents and configure tool choice.\nTask 2.4 Integrate MCP servers into Claude Code and agent workflows.\nTask 2.5 Select and apply built-in tools (Read, Write, Edit, Bash, Grep, Glob) effectively."
     },
     {
       "name": "Claude Code Configuration & Workflows",
-      "description": "Domain 3 (20%): Task 3.1 Configure CLAUDE.md files with appropriate hierarchy, scoping, and modular organization. Task 3.2 Create and configure custom slash commands and skills. Task 3.3 Apply path-specific rules for conditional convention loading. Task 3.4 Determine when to use plan mode vs direct execution. Task 3.5 Apply iterative refinement techniques for progressive improvement. Task 3.6 Integrate Claude Code into CI/CD pipelines."
+      "description": "Domain 3 (20%):\nTask 3.1 Configure CLAUDE.md files with appropriate hierarchy, scoping, and modular organization.\nTask 3.2 Create and configure custom slash commands and skills.\nTask 3.3 Apply path-specific rules for conditional convention loading.\nTask 3.4 Determine when to use plan mode vs direct execution.\nTask 3.5 Apply iterative refinement techniques for progressive improvement.\nTask 3.6 Integrate Claude Code into CI/CD pipelines."
     },
     {
       "name": "Prompt Engineering & Structured Output",
-      "description": "Domain 4 (20%): Task 4.1 Design prompts with explicit criteria to improve precision and reduce false positives. Task 4.2 Apply few-shot prompting to improve output consistency and quality. Task 4.3 Enforce structured output using tool use and JSON schemas. Task 4.4 Implement validation, retry, and feedback loops for extraction quality. Task 4.5 Design efficient batch processing strategies. Task 4.6 Design multi-instance and multi-pass review architectures."
+      "description": "Domain 4 (20%):\nTask 4.1 Design prompts with explicit criteria to improve precision and reduce false positives.\nTask 4.2 Apply few-shot prompting to improve output consistency and quality.\nTask 4.3 Enforce structured output using tool use and JSON schemas.\nTask 4.4 Implement validation, retry, and feedback loops for extraction quality.\nTask 4.5 Design efficient batch processing strategies.\nTask 4.6 Design multi-instance and multi-pass review architectures."
     },
     {
       "name": "Context Management & Reliability",
-      "description": "Domain 5 (15%): Task 5.1 Manage conversation context to preserve critical information across long interactions. Task 5.2 Design effective escalation and ambiguity resolution patterns. Task 5.3 Implement error propagation strategies across multi-agent systems. Task 5.4 Manage context effectively in large codebase exploration. Task 5.5 Design human review workflows and confidence calibration. Task 5.6 Preserve information provenance and handle uncertainty in multi-source synthesis."
+      "description": "Domain 5 (15%):\nTask 5.1 Manage conversation context to preserve critical information across long interactions.\nTask 5.2 Design effective escalation and ambiguity resolution patterns.\nTask 5.3 Implement error propagation strategies across multi-agent systems.\nTask 5.4 Manage context effectively in large codebase exploration.\nTask 5.5 Design human review workflows and confidence calibration.\nTask 5.6 Preserve information provenance and handle uncertainty in multi-source synthesis."
     }
   ]
 }
