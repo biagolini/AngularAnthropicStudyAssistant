@@ -1,8 +1,14 @@
+export interface PackDomain {
+  name: string;
+  description: string;
+}
+
 export interface Pack {
   id: string;
   name: string;
+  description: string;
   version: string;
-  domains: string[];
+  domains: PackDomain[];
   color: string;
   enabledMcps: string[];
   createdAt: number;

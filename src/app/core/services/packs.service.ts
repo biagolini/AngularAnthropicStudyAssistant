@@ -4,6 +4,7 @@ import {
   DEFAULT_PACK_NAME,
   MAX_PACK_DOMAINS,
   Pack,
+  PackDomain,
   isAcceptablePackColor,
 } from '../models/pack.model';
 import { SettingsService } from './settings.service';
@@ -11,8 +12,9 @@ import { StorageService } from './storage.service';
 
 export interface PackDraft {
   name: string;
+  description: string;
   version: string;
-  domains: string[];
+  domains: PackDomain[];
   color: string;
   enabledMcps: string[];
 }
@@ -52,6 +54,7 @@ export class PacksService {
     const pack: Pack = {
       id: this.uuid(),
       name: draft.name.trim() || DEFAULT_PACK_NAME,
+      description: draft.description.trim(),
       version: draft.version.trim(),
       domains: this.normalizeDomains(draft.domains),
       color: isAcceptablePackColor(draft.color) ? draft.color : DEFAULT_PACK_COLOR,
@@ -71,6 +74,7 @@ export class PacksService {
         ? {
             ...p,
             name: draft.name.trim() || p.name,
+            description: draft.description.trim(),
             version: draft.version.trim(),
             domains: this.normalizeDomains(draft.domains),
             color: isAcceptablePackColor(draft.color) ? draft.color : p.color,
@@ -106,16 +110,16 @@ export class PacksService {
     return this.state().find((p) => p.id === id);
   }
 
-  private normalizeDomains(domains: string[]): string[] {
+  private normalizeDomains(domains: PackDomain[]): PackDomain[] {
     const seen = new Set<string>();
-    const result: string[] = [];
+    const result: PackDomain[] = [];
     for (const domain of domains) {
-      const trimmed = domain.trim();
-      if (!trimmed) continue;
-      const key = trimmed.toLowerCase();
+      const name = domain.name.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      result.push(trimmed);
+      result.push({ name, description: domain.description.trim() });
       if (result.length >= MAX_PACK_DOMAINS) break;
     }
     return result;
@@ -143,6 +147,7 @@ export class PacksService {
     return {
       id: this.uuid(),
       name: DEFAULT_PACK_NAME,
+      description: '',
       version: '',
       domains: [],
       color: DEFAULT_PACK_COLOR,

@@ -319,8 +319,8 @@ export class QuestionInputComponent {
     }
 
     const activePack = this.packs.activePack();
-    const domains = activePack.domains;
-    const certName = activePack.name;
+    const packContext = { name: activePack.name, description: activePack.description, domains: activePack.domains };
+    const domains = activePack.domains.map((d) => d.name);
     const fallbackTitle = text.slice(0, 80).replace(/\s+/g, ' ').trim();
 
     const controller = new AbortController();
@@ -343,8 +343,7 @@ export class QuestionInputComponent {
       for await (const chunk of this.anthropic.streamReview(
         text,
         apiKey,
-        certName,
-        domains,
+        packContext,
         awsOptions,
         this.selectedModel(),
         controller.signal,

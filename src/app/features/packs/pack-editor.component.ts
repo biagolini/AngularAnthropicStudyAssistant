@@ -6,6 +6,7 @@ import {
   MAX_PACK_DOMAINS,
   PACK_COLORS,
   Pack,
+  PackDomain,
   isAcceptablePackColor,
   isValidHexColor,
   isValidPackColor,
@@ -65,6 +66,18 @@ import { QuestionsService } from '../../core/services/questions.service';
               aria-label="Pack version"
             />
             <span class="field-hint">Shown after the name in the switcher.</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Certification description (optional)</span>
+            <textarea
+              class="text-input textarea"
+              [(ngModel)]="descriptionDraft"
+              placeholder="Overview of the certification, target audience, exam structure..."
+              aria-label="Certification description"
+              rows="4"
+            ></textarea>
+            <span class="field-hint">Injected into the AI prompt to improve classification and explanation quality.</span>
           </label>
 
           <div class="field">
@@ -172,50 +185,59 @@ import { QuestionsService } from '../../core/services/questions.service';
                 {{ jsonImportMessage() }}
               </p>
             }
-            <div class="domain-input">
-              <input
-                class="text-input"
-                type="text"
-                [(ngModel)]="domainDraft"
-                (keyup.enter)="onAddDomain()"
-                placeholder="Add a domain"
+            <div class="domain-add-group">
+              <div class="domain-input">
+                <input
+                  class="text-input"
+                  type="text"
+                  [(ngModel)]="domainDraft"
+                  (keyup.enter)="onAddDomain()"
+                  placeholder="Domain name"
+                  [disabled]="domains().length >= maxDomains"
+                  aria-label="New domain name"
+                />
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  (click)="onAddDomain()"
+                  [disabled]="!domainDraft.trim() || domains().length >= maxDomains"
+                >
+                  Add
+                </button>
+              </div>
+              <textarea
+                class="text-input textarea domain-desc-input"
+                [(ngModel)]="domainDescDraft"
+                placeholder="Domain description (optional) — tasks, weight, topics..."
+                aria-label="New domain description"
+                rows="2"
                 [disabled]="domains().length >= maxDomains"
-                aria-label="New domain"
-              />
-              <button
-                type="button"
-                class="btn btn-secondary"
-                (click)="onAddDomain()"
-                [disabled]="!domainDraft.trim() || domains().length >= maxDomains"
-              >
-                Add
-              </button>
+              ></textarea>
             </div>
             @if (domainError()) {
               <p class="error">{{ domainError() }}</p>
             }
             <p class="count">{{ domains().length }} / {{ maxDomains }} domains</p>
             @if (domains().length > 0) {
-              <ul class="chips">
-                @for (domain of domains(); track domain) {
-                  <li class="chip">
-                    <span>{{ domain }}</span>
-                    <button
-                      type="button"
-                      class="chip-remove"
-                      (click)="removeDomain(domain)"
-                      [attr.aria-label]="'Remove ' + domain"
-                    >
-                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                        <path
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          d="M5 5l14 14M19 5L5 19"
-                        />
-                      </svg>
-                    </button>
+              <ul class="domain-list">
+                @for (domain of domains(); track domain.name) {
+                  <li class="domain-item">
+                    <div class="domain-item-header">
+                      <span class="domain-item-name">{{ domain.name }}</span>
+                      <button
+                        type="button"
+                        class="chip-remove"
+                        (click)="removeDomain(domain.name)"
+                        [attr.aria-label]="'Remove ' + domain.name"
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                          <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 5l14 14M19 5L5 19"/>
+                        </svg>
+                      </button>
+                    </div>
+                    @if (domain.description) {
+                      <p class="domain-item-desc">{{ domain.description }}</p>
+                    }
                   </li>
                 }
               </ul>
@@ -435,12 +457,57 @@ import { QuestionsService } from '../../core/services/questions.service';
         color: var(--color-red);
         background: rgba(214, 48, 49, 0.08);
       }
+      .textarea {
+        height: auto;
+        padding: var(--space-sm) var(--space-md);
+        resize: vertical;
+        font-family: inherit;
+        line-height: 1.45;
+      }
+      .domain-add-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
+      .domain-desc-input {
+        font-size: var(--font-size-sm);
+      }
       .domain-input {
         display: flex;
         gap: var(--space-sm);
       }
       .domain-input .text-input {
         flex: 1;
+      }
+      .domain-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+      }
+      .domain-item {
+        list-style: none;
+        background: var(--bg-elevated);
+        border: 1px solid var(--bg-border);
+        border-radius: var(--radius-md);
+        padding: var(--space-xs) var(--space-sm);
+      }
+      .domain-item-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-xs);
+      }
+      .domain-item-name {
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .domain-item-desc {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        line-height: 1.4;
+        margin-top: 2px;
+        white-space: pre-wrap;
       }
       .mcp-list {
         display: flex;
@@ -626,10 +693,12 @@ export class PackEditorComponent {
   protected readonly mcpCatalog = MCP_CATALOG;
 
   protected nameDraft = '';
+  protected descriptionDraft = '';
   protected versionDraft = '';
   protected domainDraft = '';
+  protected domainDescDraft = '';
   protected readonly colorDraft = signal<string>(DEFAULT_PACK_COLOR);
-  protected readonly domainsDraft = signal<string[]>([]);
+  protected readonly domainsDraft = signal<PackDomain[]>([]);
   protected readonly mcpsDraft = signal<string[]>([]);
   protected readonly domainError = signal<string | null>(null);
   protected readonly confirmingDelete = signal(false);
@@ -653,11 +722,13 @@ export class PackEditorComponent {
     const sync = () => {
       const p = this.pack();
       this.nameDraft = p?.name ?? '';
+      this.descriptionDraft = p?.description ?? '';
       this.versionDraft = p?.version ?? '';
       this.colorDraft.set(p?.color ?? DEFAULT_PACK_COLOR);
       this.domainsDraft.set(p ? [...p.domains] : []);
       this.mcpsDraft.set(p ? [...(p.enabledMcps ?? [])] : []);
       this.domainDraft = '';
+      this.domainDescDraft = '';
       this.domainError.set(null);
       this.confirmingDelete.set(false);
     };
@@ -697,9 +768,23 @@ export class PackEditorComponent {
           this.colorDraft.set(parsed.color.trim());
           applied.push('color');
         }
+        if (typeof (parsed as Partial<{description: string}>).description === 'string') {
+          this.descriptionDraft = ((parsed as Partial<{description: string}>).description ?? '').trim();
+          applied.push('description');
+        }
         if (Array.isArray(parsed.domains)) {
-          const domains = parsed.domains
-            .filter((d): d is string => typeof d === 'string' && !!d.trim())
+          const domains: PackDomain[] = parsed.domains
+            .map((d) => {
+              if (typeof d === 'string' && d.trim()) return { name: d.trim(), description: '' };
+              if (d && typeof d === 'object') {
+                const obj = d as Record<string, unknown>;
+                const name = typeof obj['name'] === 'string' ? obj['name'].trim() : '';
+                if (!name) return null;
+                return { name, description: typeof obj['description'] === 'string' ? obj['description'].trim() : '' };
+              }
+              return null;
+            })
+            .filter((d): d is PackDomain => d !== null)
             .slice(0, MAX_PACK_DOMAINS);
           this.domainsDraft.set(domains);
           applied.push(`${domains.length} domain${domains.length === 1 ? '' : 's'}`);
@@ -736,13 +821,13 @@ export class PackEditorComponent {
   }
 
   onAddDomain(): void {
-    const value = this.domainDraft.trim();
-    if (!value) {
+    const name = this.domainDraft.trim();
+    if (!name) {
       this.domainError.set('Domain name cannot be empty.');
       return;
     }
     const current = this.domainsDraft();
-    if (current.some((d) => d.toLowerCase() === value.toLowerCase())) {
+    if (current.some((d) => d.name.toLowerCase() === name.toLowerCase())) {
       this.domainError.set('Domain already exists.');
       return;
     }
@@ -750,13 +835,14 @@ export class PackEditorComponent {
       this.domainError.set(`Maximum ${MAX_PACK_DOMAINS} domains reached.`);
       return;
     }
-    this.domainsDraft.set([...current, value]);
+    this.domainsDraft.set([...current, { name, description: this.domainDescDraft.trim() }]);
     this.domainDraft = '';
+    this.domainDescDraft = '';
     this.domainError.set(null);
   }
 
-  removeDomain(domain: string): void {
-    this.domainsDraft.set(this.domainsDraft().filter((d) => d !== domain));
+  removeDomain(name: string): void {
+    this.domainsDraft.set(this.domainsDraft().filter((d) => d.name !== name));
   }
 
   isMcpEnabled(id: string): boolean {
@@ -773,6 +859,7 @@ export class PackEditorComponent {
   onSave(): void {
     const draft = {
       name: this.nameDraft.trim(),
+      description: this.descriptionDraft.trim(),
       version: this.versionDraft.trim(),
       domains: this.domainsDraft(),
       color: this.colorDraft(),

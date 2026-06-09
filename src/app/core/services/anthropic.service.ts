@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { MCP_BETA_HEADER, McpServerEntry } from '../models/mcp.model';
 import { DEFAULT_MODEL, isAwsApiKey } from '../models/settings.model';
-import { buildSystemPrompt } from '../utils/review-prompt.util';
+import { PackContext, buildSystemPrompt } from '../utils/review-prompt.util';
 import { buildTranscriptScriptPrompt } from '../utils/transcript-prompt.util';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
@@ -34,8 +34,7 @@ export class AnthropicService {
     currentReview: string,
     feedback: string,
     apiKey: string,
-    certName: string,
-    domains: string[],
+    pack: PackContext,
     aws?: AwsRoutingOptions,
     model?: string,
     outputLanguage?: string,
@@ -44,7 +43,7 @@ export class AnthropicService {
     if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
     if (!currentReview.trim()) throw new Error('No review to refine.');
 
-    const system = buildSystemPrompt(certName, domains, outputLanguage);
+    const system = buildSystemPrompt(pack, outputLanguage);
     const userMessage = `You previously generated the exam review below. Refine it based on the user's feedback while keeping the SAME OUTPUT FORMAT specified in your instructions.
 
 === CURRENT REVIEW ===
@@ -95,15 +94,14 @@ Return the FULL refined review. Apply only the changes needed to address the fee
   async generateReview(
     question: string,
     apiKey: string,
-    certName: string,
-    domains: string[],
+    pack: PackContext,
     aws?: AwsRoutingOptions,
     model?: string,
     outputLanguage?: string,
   ): Promise<string> {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
-    const system = buildSystemPrompt(certName, domains, outputLanguage);
+    const system = buildSystemPrompt(pack, outputLanguage);
     return this.callMessages(
       apiKey,
       aws,
@@ -174,8 +172,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
   async *streamReview(
     question: string,
     apiKey: string,
-    certName: string,
-    domains: string[],
+    pack: PackContext,
     aws: AwsRoutingOptions | undefined,
     model: string | undefined,
     signal: AbortSignal,
@@ -184,7 +181,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
   ): AsyncGenerator<string, void, void> {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
-    const system = buildSystemPrompt(certName, domains, outputLanguage);
+    const system = buildSystemPrompt(pack, outputLanguage);
     yield* this.streamMessages(
       apiKey,
       aws,
@@ -231,8 +228,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     currentReview: string,
     feedback: string,
     apiKey: string,
-    certName: string,
-    domains: string[],
+    pack: PackContext,
     aws: AwsRoutingOptions | undefined,
     model: string | undefined,
     signal: AbortSignal,
@@ -243,7 +239,7 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
     if (!currentReview.trim()) throw new Error('No review to refine.');
 
-    const system = buildSystemPrompt(certName, domains, outputLanguage);
+    const system = buildSystemPrompt(pack, outputLanguage);
     const userMessage = `You previously generated the exam review below. Refine it based on the user's feedback while keeping the SAME OUTPUT FORMAT specified in your instructions.
 
 === CURRENT REVIEW ===

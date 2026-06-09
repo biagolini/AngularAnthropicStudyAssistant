@@ -4,10 +4,24 @@ import {
   DEFAULT_PACK_COLOR,
   DEFAULT_PACK_NAME,
   Pack,
+  PackDomain,
 } from '../models/pack.model';
 import { Script } from '../models/script.model';
 import { AppSettings, DEFAULT_SETTINGS } from '../models/settings.model';
 import { isStudyMethod } from '../models/method.model';
+
+function deserializeDomain(raw: unknown): PackDomain | null {
+  if (typeof raw === 'string' && raw.trim()) {
+    return { name: raw.trim(), description: '' };
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    const name = typeof obj['name'] === 'string' ? obj['name'].trim() : '';
+    if (!name) return null;
+    return { name, description: typeof obj['description'] === 'string' ? obj['description'] : '' };
+  }
+  return null;
+}
 
 const PREFIX = 'cert_study__';
 const KEY_API = `${PREFIX}api_key`;
@@ -71,8 +85,11 @@ export class StorageService {
         .map((p) => ({
           id: p.id,
           name: p.name,
+          description: typeof (p as unknown as Record<string, unknown>)['description'] === 'string'
+            ? (p as unknown as Record<string, unknown>)['description'] as string
+            : '',
           version: typeof p.version === 'string' ? p.version : '',
-          domains: Array.isArray(p.domains) ? p.domains.filter((d): d is string => typeof d === 'string') : [],
+          domains: Array.isArray(p.domains) ? p.domains.map(deserializeDomain).filter((d): d is PackDomain => !!d) : [],
           color: typeof p.color === 'string' && p.color ? p.color : DEFAULT_PACK_COLOR,
           enabledMcps: Array.isArray(p.enabledMcps)
             ? p.enabledMcps.filter((id): id is string => typeof id === 'string')
@@ -168,8 +185,9 @@ export class StorageService {
     const seedPack: Pack = {
       id: this.uuid(),
       name: hasLegacyData ? legacyName || DEFAULT_PACK_NAME : DEFAULT_PACK_NAME,
+      description: '',
       version: '',
-      domains: legacyDomains,
+      domains: legacyDomains.map((name) => ({ name, description: '' })),
       color: DEFAULT_PACK_COLOR,
       enabledMcps: [],
       createdAt: now,

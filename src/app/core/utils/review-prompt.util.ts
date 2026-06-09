@@ -1,15 +1,30 @@
 import { outputLanguageLabel } from '../models/settings.model';
+import { PackDomain } from '../models/pack.model';
 
-export function buildSystemPrompt(certName: string, domains: string[], outputLanguage = ''): string {
+export interface PackContext {
+  name: string;
+  description: string;
+  domains: PackDomain[];
+}
+
+export function buildSystemPrompt(pack: PackContext, outputLanguage = ''): string {
   const languageName = outputLanguage ? outputLanguageLabel(outputLanguage) : '';
-  const certLine = certName
-    ? `The user is studying for the **${certName}** certification.`
+
+  const certLine = pack.name
+    ? `The user is studying for the **${pack.name}** certification.`
     : `The user is studying for an IT certification exam.`;
 
+  const certDescription = pack.description
+    ? `\nCertification overview:\n${pack.description}`
+    : '';
+
   const domainSection =
-    domains.length > 0
-      ? `The following knowledge domains have been defined for this certification:\n${domains
-          .map((d, i) => `${i + 1}. ${d}`)
+    pack.domains.length > 0
+      ? `The following knowledge domains have been defined for this certification:\n${pack.domains
+          .map((d, i) => {
+            const desc = d.description ? `\n   ${d.description}` : '';
+            return `${i + 1}. ${d.name}${desc}`;
+          })
           .join('\n')}\n\nClassify each question into one of these domains. At the very end of your response, AFTER all other content, output these two lines exactly:\nINFERRED_TITLE: [short 4-8 word descriptive title for this question, no prefixes like "Scenario:" or "Question:", no quotes]\nINFERRED_DOMAIN: [exact domain name from the list above]`
       : `No specific domains have been defined. Classify all questions under the domain name: General\n\nAt the very end of your response, AFTER all other content, output these two lines exactly:\nINFERRED_TITLE: [short 4-8 word descriptive title for this question, no prefixes like "Scenario:" or "Question:", no quotes]\nINFERRED_DOMAIN: General`;
 
@@ -19,7 +34,7 @@ export function buildSystemPrompt(certName: string, domains: string[], outputLan
 
   const outputFormat = outputLanguage ? OUTPUT_FORMAT_TRANSLATED : OUTPUT_FORMAT_SINGLE;
 
-  return `You are a technical reviewer preparing study material for an IT certification exam. ${certLine}
+  return `You are a technical reviewer preparing study material for an IT certification exam. ${certLine}${certDescription}
 
 Your task is to generate a structured review of an exam question following the template below EXACTLY.
 

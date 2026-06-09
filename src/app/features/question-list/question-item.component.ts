@@ -190,7 +190,7 @@ export class QuestionItemComponent {
   readonly showPicker = computed(() => this.pickerOpen());
 
   readonly domainOptions = computed(() => {
-    const defined = this.packs.activeDomains();
+    const defined = this.packs.activeDomains().map((d) => d.name);
     const current = this.question().domain;
     const merged = defined.length > 0 ? [...defined] : [DEFAULT_DOMAIN];
     if (current && !merged.includes(current)) merged.unshift(current);
