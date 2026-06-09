@@ -41,7 +41,7 @@ import { TruncatePipe } from '../../shared/pipes/truncate.pipe';
               aria-label="Change domain"
             >
               @for (option of domainOptions(); track option) {
-                <option [value]="option">{{ option }}</option>
+                <option [value]="option" [selected]="option === question().domain">{{ option }}</option>
               }
             </select>
           } @else {
@@ -192,8 +192,7 @@ export class QuestionItemComponent {
   readonly domainOptions = computed(() => {
     const defined = this.packs.activeDomains();
     const current = this.question().domain;
-    const merged = [...defined];
-    if (!merged.includes(DEFAULT_DOMAIN)) merged.push(DEFAULT_DOMAIN);
+    const merged = defined.length > 0 ? [...defined] : [DEFAULT_DOMAIN];
     if (current && !merged.includes(current)) merged.unshift(current);
     return merged;
   });
