@@ -17,6 +17,7 @@ export class SettingsService {
   readonly activePackId = computed(() => this.state().activePackId);
   readonly webSearchEnabled = computed(() => this.state().webSearchEnabled);
   readonly activeMethod = computed(() => this.state().activeMethod);
+  readonly outputLanguage = computed(() => this.state().outputLanguage);
 
   setTheme(theme: ThemeMode): void {
     this.update((s) => ({ ...s, theme }));
@@ -47,6 +48,11 @@ export class SettingsService {
   setActiveMethod(method: StudyMethod): void {
     if (method === this.state().activeMethod) return;
     this.update((s) => ({ ...s, activeMethod: method }));
+  }
+
+  setOutputLanguage(value: string): void {
+    if (value === this.state().outputLanguage) return;
+    this.update((s) => ({ ...s, outputLanguage: value }));
   }
 
   private update(updater: (current: AppSettings) => AppSettings): void {

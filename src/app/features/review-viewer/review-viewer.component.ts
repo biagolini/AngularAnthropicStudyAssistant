@@ -601,6 +601,7 @@ export class ReviewViewerComponent {
         this.selectedRefineModel(),
         controller.signal,
         extras,
+        this.settings.outputLanguage(),
       )) {
         accumulated += chunk;
         if (!started) {

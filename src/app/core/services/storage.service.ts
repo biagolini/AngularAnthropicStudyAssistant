@@ -129,6 +129,7 @@ export class StorageService {
           typeof parsed.activeMethod === 'string' && isStudyMethod(parsed.activeMethod)
             ? parsed.activeMethod
             : DEFAULT_SETTINGS.activeMethod,
+        outputLanguage: typeof parsed.outputLanguage === 'string' ? parsed.outputLanguage : DEFAULT_SETTINGS.outputLanguage,
       };
     } catch {
       return { ...DEFAULT_SETTINGS };

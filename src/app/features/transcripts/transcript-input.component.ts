@@ -328,6 +328,7 @@ export class TranscriptInputComponent {
         this.selectedModel(),
         controller.signal,
         extras,
+        this.settings.outputLanguage(),
       )) {
         accumulated += chunk;
         if (!script) {

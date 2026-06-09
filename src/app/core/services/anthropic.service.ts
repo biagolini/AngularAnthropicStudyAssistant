@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { MCP_BETA_HEADER, McpServerEntry } from '../models/mcp.model';
 import { DEFAULT_MODEL, isAwsApiKey } from '../models/settings.model';
+import { buildSystemPrompt } from '../utils/review-prompt.util';
+import { buildTranscriptScriptPrompt } from '../utils/transcript-prompt.util';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -36,12 +38,13 @@ export class AnthropicService {
     domains: string[],
     aws?: AwsRoutingOptions,
     model?: string,
+    outputLanguage?: string,
   ): Promise<string> {
     const trimmedFeedback = feedback.trim();
     if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
     if (!currentReview.trim()) throw new Error('No review to refine.');
 
-    const system = buildSystemPrompt(certName, domains);
+    const system = buildSystemPrompt(certName, domains, outputLanguage);
     const userMessage = `You previously generated the exam review below. Refine it based on the user's feedback while keeping the SAME OUTPUT FORMAT specified in your instructions.
 
 === CURRENT REVIEW ===
@@ -96,10 +99,11 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     domains: string[],
     aws?: AwsRoutingOptions,
     model?: string,
+    outputLanguage?: string,
   ): Promise<string> {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
-    const system = buildSystemPrompt(certName, domains);
+    const system = buildSystemPrompt(certName, domains, outputLanguage);
     return this.callMessages(
       apiKey,
       aws,
@@ -176,10 +180,11 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     model: string | undefined,
     signal: AbortSignal,
     extras?: CallExtras,
+    outputLanguage?: string,
   ): AsyncGenerator<string, void, void> {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion) throw new Error('Question cannot be empty.');
-    const system = buildSystemPrompt(certName, domains);
+    const system = buildSystemPrompt(certName, domains, outputLanguage);
     yield* this.streamMessages(
       apiKey,
       aws,
@@ -198,13 +203,14 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     model: string | undefined,
     signal: AbortSignal,
     extras?: CallExtras,
+    outputLanguage?: string,
   ): AsyncGenerator<string, void, void> {
     const cleaned = transcripts
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
     if (cleaned.length === 0) throw new Error('At least one transcript is required.');
 
-    const system = buildTranscriptScriptPrompt();
+    const system = buildTranscriptScriptPrompt(outputLanguage);
     const joined = cleaned
       .map((text, i) => `--- LESSON ${i + 1} TRANSCRIPT ---\n${text}`)
       .join('\n\n');
@@ -231,12 +237,13 @@ Return the FULL refined review. Apply only the changes needed to address the fee
     model: string | undefined,
     signal: AbortSignal,
     extras?: CallExtras,
+    outputLanguage?: string,
   ): AsyncGenerator<string, void, void> {
     const trimmedFeedback = feedback.trim();
     if (!trimmedFeedback) throw new Error('Feedback cannot be empty.');
     if (!currentReview.trim()) throw new Error('No review to refine.');
 
-    const system = buildSystemPrompt(certName, domains);
+    const system = buildSystemPrompt(certName, domains, outputLanguage);
     const userMessage = `You previously generated the exam review below. Refine it based on the user's feedback while keeping the SAME OUTPUT FORMAT specified in your instructions.
 
 === CURRENT REVIEW ===
@@ -385,112 +392,3 @@ function extractTextDelta(block: string): string | null {
   return null;
 }
 
-function buildTranscriptScriptPrompt(): string {
-  return `You are a technical educator. You read lesson transcripts and produce a single structured technical summary that another AI will narrate as an educational podcast. Your job is to extract, organize, and explain the technical content from the transcripts so the narrator AI has enough substance to talk about.
-
-OUTPUT REQUIREMENTS — follow EXACTLY:
-
-# Resumo técnico: <main topic>
-
-## Visão geral
-[2-4 sentence overview of what will be covered. Frame the topic and why it matters, in plain language. Do NOT mention "podcast", "narrator", "audio", or any meta-reference to the medium. Write as if the reader IS the audience.]
-
-## Capítulo 1 — <chapter title>
-[Several paragraphs of technical content drawn from the transcripts. Start with the simplest, most foundational concepts. Define terms on first use with both the technical term and a plain-language explanation. Include concrete examples and analogies. Cite which lesson(s) the material came from inline where useful, e.g. "(from Aula 2)".]
-
-## Capítulo 2 — <chapter title>
-[Builds on Chapter 1. Slightly more advanced concepts and details.]
-
-[Continue with capítulos in order of increasing difficulty until all important content from the transcripts is covered. Aim for 3 to 7 chapters depending on transcript volume.]
-
-## Pontos-chave
-- [3 to 8 bullet points of the most important takeaways from the material, in the same simple-to-complex order.]
-
-STRICT CONSTRAINTS:
-- NEVER use the phrase "guia para podcast", "roteiro de podcast", "script", "narrator", "host", or any reference to the audio medium. The document must read as a standalone technical summary.
-- NEVER use code blocks. Inline code with backticks is fine for short identifiers.
-- NEVER use emojis.
-- Write in clear, fluid Portuguese (PT-BR) UNLESS the transcripts are in English, in which case use English. Match the dominant language of the source.
-- Use **bold** for important terms and key concepts. Use *italic* sparingly for emphasis.
-- Prefer narrative paragraphs over dense bullet lists, except in "Pontos-chave".
-- Stay faithful to what is in the transcripts. Do not invent facts the transcripts do not support.
-- If the transcripts contradict each other, note the disagreement neutrally.
-
-At the very end of your response, AFTER all other content, output this line exactly:
-INFERRED_TITLE: [the same <main topic> you used in the H1, without "Resumo técnico:" prefix, no quotes]`;
-}
-
-function buildSystemPrompt(certName: string, domains: string[]): string {
-  const certLine = certName
-    ? `The user is studying for the **${certName}** certification.`
-    : `The user is studying for an IT certification exam.`;
-
-  const domainSection =
-    domains.length > 0
-      ? `The following knowledge domains have been defined for this certification:\n${domains
-          .map((d, i) => `${i + 1}. ${d}`)
-          .join('\n')}\n\nClassify each question into one of these domains. At the very end of your response, AFTER all other content, output these two lines exactly:\nINFERRED_TITLE: [short 4-8 word descriptive title for this question, no prefixes like "Scenario:" or "Question:", no quotes]\nINFERRED_DOMAIN: [exact domain name from the list above]`
-      : `No specific domains have been defined. Classify all questions under the domain name: General\n\nAt the very end of your response, AFTER all other content, output these two lines exactly:\nINFERRED_TITLE: [short 4-8 word descriptive title for this question, no prefixes like "Scenario:" or "Question:", no quotes]\nINFERRED_DOMAIN: General`;
-
-  return `You are a technical reviewer preparing study material for an IT certification exam. ${certLine}
-
-Your task is to generate a structured review of an exam question following the template below EXACTLY.
-
-${domainSection}
-
-OUTPUT FORMAT — follow this EXACTLY:
-
----
-
-## Question
-
-### Key concepts related to this question:
-- [List 3-6 core concepts/technologies tested]
-
-### Question Context:
-[2-4 sentences explaining what the question evaluates and which domain it belongs to]
-
-### Question stem:
-[Exact question text from user input]
-*Translation: [Full Portuguese translation — ONLY if the question is in English]*
-
-### Alternatives:
-*A. [Exact alternative text]*
-*Translation: [Portuguese translation — ONLY if the question is in English]*
-
-*B. [Exact alternative text]*
-*Translation: [Portuguese translation — ONLY if the question is in English]*
-
-*C. [Exact alternative text]*
-*Translation: [Portuguese translation — ONLY if the question is in English]*
-
-*D. [Exact alternative text]*
-*Translation: [Portuguese translation — ONLY if the question is in English]*
-
-### Correct answer and explanation:
-*[Letter]. [Exact text of the correct alternative]*
-*Translation: [Portuguese translation — ONLY if in English]*
-
-[Explanation in 1-2 short paragraphs (max 5-6 sentences) on why it is correct. Focus on the validated concept, applicable best practice, and technical reasoning. Use technical terms with Portuguese translation in parentheses on first occurrence.]
-
-### Incorrect answers and justifications:
-*[Letter]. [Exact alternative text]*
-*Translation: [Portuguese translation — ONLY if in English]*
-
-- **Why it is incorrect**: [Main technical/conceptual error in 1-2 sentences]
-- **Additional problem**: [Operational risk, anti-pattern, or negative consequence — optional]
-- **When it would be valid**: [Context where the approach could make sense — optional]
-
-[Repeat for each incorrect alternative]
-
-STRICT CONSTRAINTS:
-- NEVER include code blocks of any language
-- NEVER use emojis
-- NEVER create subsections with #### inside explanations
-- Keep narrative language, fluid and suitable for reading aloud
-- Use **bold** for important terms and key concepts
-- If the question is already in Portuguese, omit all translation lines
-- Keep explanations concise — prioritize clarity over completeness
-- When there is ambiguity between alternatives, explain the elimination reasoning
-- Base explanations on official vendor documentation and production best practices`;
-}

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { AWS_REGIONS, isAwsApiKey } from '../../core/models/settings.model';
+import { AWS_REGIONS, OUTPUT_LANGUAGES, isAwsApiKey } from '../../core/models/settings.model';
 import { AnthropicService } from '../../core/services/anthropic.service';
 import { ModelsService } from '../../core/services/models.service';
 import { QuestionsService } from '../../core/services/questions.service';
@@ -132,6 +132,25 @@ type TestStatus = 'idle' | 'testing' | 'ok' | 'failed';
             </label>
           </section>
         }
+
+        <section class="block">
+          <header class="section-header">
+            <h3>Output language</h3>
+            <p class="helper">
+              Language used in explanations and translations. Default keeps the same language as the input question or transcript.
+            </p>
+          </header>
+          <select
+            class="text-input"
+            [ngModel]="outputLanguage()"
+            (ngModelChange)="onOutputLanguageChange($event)"
+            aria-label="Output language"
+          >
+            @for (lang of outputLanguages; track lang.code) {
+              <option [value]="lang.code">{{ lang.label }}</option>
+            }
+          </select>
+        </section>
 
         @if (showAwsBlock()) {
           <section class="block aws-block">
@@ -646,6 +665,7 @@ export class SettingsComponent {
   protected readonly workspaceIdDraft = signal(this.settings.awsWorkspaceId());
   protected readonly confirmingClear = signal(false);
   protected readonly regions = AWS_REGIONS;
+  protected readonly outputLanguages = OUTPUT_LANGUAGES;
 
   readonly closed = output<void>();
 
@@ -663,6 +683,7 @@ export class SettingsComponent {
   readonly modelsError = this.modelsService.error;
   readonly defaultModel = this.settings.defaultModel;
   readonly webSearchDefault = this.settings.webSearchEnabled;
+  readonly outputLanguage = this.settings.outputLanguage;
 
   protected readonly testStatus = signal<TestStatus>('idle');
   protected readonly testError = signal<string>('');
@@ -703,6 +724,11 @@ export class SettingsComponent {
       if (region) {
         this.settings.setAwsRegion(region);
         applied.push('Region');
+      }
+      const lang = vars['ANTHROPIC_OUTPUT_LANGUAGE'];
+      if (lang) {
+        this.settings.setOutputLanguage(lang);
+        applied.push('Output language');
       }
 
       if (applied.length > 0) {
@@ -764,6 +790,10 @@ export class SettingsComponent {
   onToggleWebSearchDefault(event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     this.settings.setWebSearchEnabled(checked);
+  }
+
+  onOutputLanguageChange(value: string): void {
+    this.settings.setOutputLanguage(value);
   }
 
   refreshModels(): void {

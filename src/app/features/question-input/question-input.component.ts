@@ -7,6 +7,7 @@ import { PacksService } from '../../core/services/packs.service';
 import { QuestionsService } from '../../core/services/questions.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { StorageService } from '../../core/services/storage.service';
+import { outputLanguageLabel } from '../../core/models/settings.model';
 import { Question } from '../../core/models/question.model';
 import {
   parseDomainFromResponse,
@@ -86,6 +87,10 @@ import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.com
         >
           <span>Generate Review</span>
         </button>
+      }
+
+      @if (outputLanguage()) {
+        <p class="lang-hint">Output language: {{ outputLanguageName() }}</p>
       }
 
       @if (error()) {
@@ -252,6 +257,10 @@ import { AiDisclaimerComponent } from '../../shared/components/ai-disclaimer.com
         background: #ffffff;
         border-radius: 3px;
       }
+      .lang-hint {
+        font-size: var(--font-size-sm);
+        color: var(--text-faint);
+      }
       .error {
         color: var(--color-red);
         font-size: var(--font-size-sm);
@@ -267,6 +276,8 @@ export class QuestionInputComponent {
   private readonly modelsService = inject(ModelsService);
   private readonly packs = inject(PacksService);
 
+  protected readonly outputLanguage = this.settings.outputLanguage;
+  protected readonly outputLanguageName = computed(() => outputLanguageLabel(this.outputLanguage()));
   protected readonly streaming = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly modelOverride = signal<string | null>(null);
@@ -338,6 +349,7 @@ export class QuestionInputComponent {
         this.selectedModel(),
         controller.signal,
         extras,
+        this.settings.outputLanguage(),
       )) {
         accumulated += chunk;
         if (!question) {
