@@ -46,7 +46,7 @@ export class ExportService {
         md += `\n\n${packDomain.description}`;
       }
       questions.forEach((q, i) => {
-        md += i > 0 ? `\n\n---\n\n### Question ${i + 1}\n\n${q.review.trim()}` : `\n\n### Question ${i + 1}\n\n${q.review.trim()}`;
+        md += `\n\n---\n\n### Question ${i + 1}\n\n${q.review.trim()}`;
       });
     }
 
