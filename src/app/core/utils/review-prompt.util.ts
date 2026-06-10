@@ -48,7 +48,9 @@ ${outputFormat}
 STRICT CONSTRAINTS:
 - NEVER include code blocks of any language
 - NEVER use emojis
-- NEVER create subsections with #### inside explanations
+- NEVER add --- (horizontal rule) anywhere in your response
+- NEVER add extra sections beyond the ones in the template (no "Explicação geral", no "Summary", no closing remarks)
+- NEVER use heading levels other than #### inside the review
 - Keep narrative language, fluid and suitable for reading aloud
 - Use **bold** for important terms and key concepts
 - Keep explanations concise — prioritize clarity over completeness
@@ -56,21 +58,17 @@ STRICT CONSTRAINTS:
 - Base explanations on official vendor documentation and production best practices`;
 }
 
-const OUTPUT_FORMAT_TRANSLATED = `---
-
-## Question
-
-### Key concepts related to this question:
+const OUTPUT_FORMAT_TRANSLATED = `#### Key concepts related to this question:
 - [List 3-6 core concepts/technologies tested]
 
-### Question Context:
+#### Question Context:
 [2-4 sentences explaining what the question evaluates and which domain it belongs to]
 
-### Question stem:
+#### Question stem:
 [Exact question text from user input]
 *Translation: [Full translation of the question stem]*
 
-### Alternatives:
+#### Alternatives:
 *A. [Exact alternative text]*
 *Translation: [Translation of alternative A]*
 
@@ -83,12 +81,12 @@ const OUTPUT_FORMAT_TRANSLATED = `---
 *D. [Exact alternative text]*
 *Translation: [Translation of alternative D]*
 
-### Correct answer and explanation:
+#### Correct answer and explanation:
 *[Letter]. [Exact alternative text]*
 
 [Explanation in 1-2 short paragraphs (max 5-6 sentences) on why it is correct. Focus on the validated concept, applicable best practice, and technical reasoning.]
 
-### Incorrect answers and justifications:
+#### Incorrect answers and justifications:
 *[Letter]. [Exact alternative text]*
 
 - **Why it is incorrect**: [Main technical/conceptual error in 1-2 sentences]
@@ -97,20 +95,16 @@ const OUTPUT_FORMAT_TRANSLATED = `---
 
 [Repeat for each incorrect alternative — restate the letter and exact alternative text, but no translation line]`;
 
-const OUTPUT_FORMAT_SINGLE = `---
-
-## Question
-
-### Key concepts related to this question:
+const OUTPUT_FORMAT_SINGLE = `#### Key concepts related to this question:
 - [List 3-6 core concepts/technologies tested]
 
-### Question Context:
+#### Question Context:
 [2-4 sentences explaining what the question evaluates and which domain it belongs to]
 
-### Question stem:
+#### Question stem:
 [Exact question text from user input]
 
-### Alternatives:
+#### Alternatives:
 *A. [Exact alternative text]*
 
 *B. [Exact alternative text]*
@@ -119,12 +113,12 @@ const OUTPUT_FORMAT_SINGLE = `---
 
 *D. [Exact alternative text]*
 
-### Correct answer and explanation:
+#### Correct answer and explanation:
 *[Letter]. [Exact alternative text]*
 
 [Explanation in 1-2 short paragraphs (max 5-6 sentences) on why it is correct. Focus on the validated concept, applicable best practice, and technical reasoning.]
 
-### Incorrect answers and justifications:
+#### Incorrect answers and justifications:
 *[Letter]. [Exact alternative text]*
 
 - **Why it is incorrect**: [Main technical/conceptual error in 1-2 sentences]
